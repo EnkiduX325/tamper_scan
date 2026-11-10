@@ -1,0 +1,3 @@
+# TamperScan 打包依赖（仅构建 exe 时需要；运行时不需要 pyinstaller）
+-r requirements.txt
+pyinstaller>=6.0

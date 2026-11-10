@@ -1,0 +1,65 @@
+{
+  "_comment": "TamperScan 白名单（阶段 7 定稿）。mode: downgrade=命中降为 INFO；filter=直接丢弃；off=不过滤。设计原则：不维护'可信文件'大名单，信任以代码签名为主；因此 paths/signers/services/tasks 保持克制，只保留扩展 ID 白名单与厂商伪装结构化豁免。",
+  "enabled": true,
+  "mode": "downgrade",
+  "paths": [],
+  "commandline_patterns": [],
+  "signers": [],
+  "domains": [],
+  "extensions": {
+    "allowlist_by_id": [],
+    "allowlist_by_id_with_max_score": {
+      "bgnkhhnnamicmpeenaelnjfhikgbkllg": 130,
+      "pdffkfellgipmhklpdmokmckkkfcopbh": 130,
+      "iikmkjmpaadaobahmlepeloendndfphd": 140,
+      "cofdbpoegempjloogbagkncekinflcnj": 60,
+      "bdiifdefkgmcblbcghdlonllpjhhjgof": 50,
+      "oikmahiipjniocckomdccmplodldodja": 50,
+      "jgimnoknfmpdaocagbnkkgbbmibjemgb": 50,
+      "cpcifbdmkopohnnofedkjghjiclmhdah": 30,
+      "pbghcbaeehloijjcebiflemhcebmlnke": 30,
+      "fcphghnknhkimeagdglkljinmpbagone": 30,
+      "mabcpcjgknpldkaeihcplbglipadmlom": 30
+    }
+  },
+  "services": [],
+  "tasks": [],
+  "masquerade_allow": [
+    {
+      "signer_contains": "SteelSeries",
+      "path_prefix": "C:\\Windows\\System32\\",
+      "require_signature_status": "valid",
+      "note": "SteelSeries/Nahimic 音频组件正常安装到 System32 根目录"
+    },
+    {
+      "signer_contains": "Micro-Star International",
+      "path_prefix": "C:\\Windows\\System32\\",
+      "require_signature_status": "valid",
+      "note": "MSI 服务组件正常安装到 System32/SysWOW64"
+    },
+    {
+      "signer_contains": "NVIDIA Corporation",
+      "path_prefix": "C:\\Windows\\System32\\",
+      "require_signature_status": "valid",
+      "note": "NVIDIA 驱动插件目录正常位于 System32 下"
+    },
+    {
+      "signer_contains": "SteelSeries",
+      "path_prefix": "C:\\Windows\\SysWOW64\\",
+      "require_signature_status": "valid",
+      "note": "SteelSeries/Nahimic 32 位组件正常安装到 SysWOW64 根目录"
+    },
+    {
+      "signer_contains": "Micro-Star International",
+      "path_prefix": "C:\\Windows\\SysWOW64\\",
+      "require_signature_status": "valid",
+      "note": "MSI 32 位服务组件正常安装到 SysWOW64 根目录"
+    },
+    {
+      "signer_contains": "NVIDIA Corporation",
+      "path_prefix": "C:\\Windows\\SysWOW64\\",
+      "require_signature_status": "valid",
+      "note": "NVIDIA 32 位驱动插件正常安装到 SysWOW64 根目录"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-# tamper_scan
-Windows anti-tamper scanner
+# TamperScan
+
 [![CI](https://github.com/EnkiduX325/tamper_scan/actions/workflows/ci.yml/badge.svg)](https://github.com/EnkiduX325/tamper_scan/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 

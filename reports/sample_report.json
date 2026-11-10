@@ -1,0 +1,2993 @@
+{
+  "tool": "TamperScan",
+  "version": "1.0.0",
+  "generated_at": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "name": "TEST-PC",
+    "os": "Windows-11-10.0.22631-SP0",
+    "is_admin": true,
+    "user": "User"
+  },
+  "scan": {
+    "duration_seconds": 47.71,
+    "modules_total": 15,
+    "modules_available": 15,
+    "modules": [
+      {
+        "name": "autoruns",
+        "label": "Autoruns 广度兜底（autorunsc64.exe）",
+        "stage": 2,
+        "status": "ok",
+        "count": 21,
+        "error": null
+      },
+      {
+        "name": "registry_run",
+        "label": "注册表 Run/RunOnce（64/32 位）",
+        "stage": 3,
+        "status": "ok",
+        "count": 4,
+        "error": null
+      },
+      {
+        "name": "registry_policy",
+        "label": "浏览器策略键 / Defender 排除项",
+        "stage": 3,
+        "status": "ok",
+        "count": 1,
+        "error": null
+      },
+      {
+        "name": "browser_settings",
+        "label": "IE/系统主页、搜索、代理",
+        "stage": 3,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "startup_lnk",
+        "label": "Startup 启动目录 LNK",
+        "stage": 3,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "scheduled_task",
+        "label": "计划任务",
+        "stage": 4,
+        "status": "ok",
+        "count": 2,
+        "error": null
+      },
+      {
+        "name": "service",
+        "label": "系统服务",
+        "stage": 4,
+        "status": "ok",
+        "count": 2,
+        "error": null
+      },
+      {
+        "name": "wmi_subscription",
+        "label": "WMI 永久订阅",
+        "stage": 4,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "network",
+        "label": "Hosts / DNS",
+        "stage": 4,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "bits",
+        "label": "BITS 作业",
+        "stage": 4,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "powershell_profile",
+        "label": "PowerShell Profile",
+        "stage": 4,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "com_hijack",
+        "label": "COM 劫持（InprocServer32）",
+        "stage": 4,
+        "status": "ok",
+        "count": 1,
+        "error": null
+      },
+      {
+        "name": "lsa_appinit",
+        "label": "LSA / AppInit / IFEO",
+        "stage": 4,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "browser_ext",
+        "label": "浏览器扩展深度检测",
+        "stage": 5,
+        "status": "ok",
+        "count": 13,
+        "error": null
+      },
+      {
+        "name": "lolbin_process",
+        "label": "LOLBin 进程与内存扫描",
+        "stage": 6,
+        "status": "ok",
+        "count": 1,
+        "error": null
+      }
+    ]
+  },
+  "summary": {
+    "total": 32,
+    "counts": {
+      "HIGH": 12,
+      "MEDIUM": 0,
+      "LOW": 2,
+      "INFO": 17,
+      "SKIPPED": 1
+    },
+    "exit_code": 2
+  },
+  "findings": [
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\PowerShell.exe",
+      "detail": "自动启动项命令行可疑（PowerShell 动态执行（IEX/Invoke-Expression））：C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\PowerShell.exe -ExecutionPolicy Bypass -NoProfile -Command \"iex([IO.File]::ReadAllText('C:\\ProgramData\\ExampleScript\\BloatRemoval.ps1…",
+      "evidence": {
+        "entry_location": "Task Scheduler",
+        "entry": "\\ExampleScript\\BloatRemoval",
+        "autoruns_category": "Scheduled Tasks",
+        "enabled": "enabled",
+        "description": "Windows PowerShell 5.1",
+        "image_path": "C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\PowerShell.exe",
+        "launch_string": "C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\PowerShell.exe -ExecutionPolicy Bypass -NoProfile -Command \"iex([IO.File]::ReadAllText('C:\\ProgramData\\ExampleScript\\BloatRemoval.ps1'))\"",
+        "version": "10.0.26100.9818",
+        "company": "Microsoft Windows",
+        "signer_column": "Microsoft Windows",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) Microsoft Windows",
+        "cmdline_hit": {
+          "pattern_id": "powershell_iex",
+          "description": "PowerShell 动态执行（IEX/Invoke-Expression）",
+          "fragment": "iex"
+        },
+        "merged_rules": [
+          "AUTORUNS_LOLBIN_CMDLINE"
+        ]
+      },
+      "rule_id": "AUTORUNS_LOLBIN_CMDLINE"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "File not found: C:\\Program Files\\Intel\\SUR\\QUEENCREEK\\x64\\powershell.exe",
+      "detail": "自动启动项命令行可疑（隐藏窗口执行（WindowStyle Hidden））：C:\\Program Files\\Intel\\SUR\\QUEENCREEK\\x64\\powershell.exe -Command \"Start-Process -WindowStyle Hidden task.bat\"",
+      "evidence": {
+        "entry_location": "Task Scheduler",
+        "entry": "\\USER_ESRV_SVC_QUEENCREEK",
+        "autoruns_category": "Scheduled Tasks",
+        "enabled": "enabled",
+        "description": "",
+        "image_path": "File not found: C:\\Program Files\\Intel\\SUR\\QUEENCREEK\\x64\\powershell.exe",
+        "launch_string": "C:\\Program Files\\Intel\\SUR\\QUEENCREEK\\x64\\powershell.exe -Command \"Start-Process -WindowStyle Hidden task.bat\"",
+        "version": "",
+        "company": "",
+        "signer_column": "",
+        "signer_column_verified": false,
+        "signer_column_raw": "",
+        "cmdline_hit": {
+          "pattern_id": "powershell_hidden",
+          "description": "隐藏窗口执行（WindowStyle Hidden）",
+          "fragment": "-WindowStyle Hidden"
+        },
+        "merged_rules": [
+          "AUTORUNS_LOLBIN_CMDLINE"
+        ]
+      },
+      "rule_id": "AUTORUNS_LOLBIN_CMDLINE"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Path\\To\\alas-launcher.exe",
+      "detail": "数字签名无效：CERT_E_UNTRUSTEDROOT：证书链根证书不受信任",
+      "evidence": {
+        "path": "C:\\Path\\To\\alas-launcher.exe",
+        "signature": {
+          "status": "invalid",
+          "signer": null,
+          "error": "CERT_E_UNTRUSTEDROOT：证书链根证书不受信任",
+          "via": "embedded"
+        },
+        "pe": {
+          "CompanyName": "taiho",
+          "FileDescription": "ExampleApp",
+          "ProductName": "ExampleApp",
+          "FileVersion": "3.0.7"
+        },
+        "registry": {
+          "key": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run（默认视图 位视图）",
+          "value_name": "ExampleApp",
+          "command": "\"C:\\Path\\To\\alas-launcher.exe\" --start-minimized",
+          "executable": "C:\\Path\\To\\alas-launcher.exe",
+          "value_type": 1
+        },
+        "entry_location": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "entry": "ExampleApp",
+        "autoruns_category": "Logon",
+        "enabled": "enabled",
+        "description": "ExampleApp",
+        "image_path": "C:\\Path\\To\\alas-launcher.exe",
+        "launch_string": "\"C:\\Path\\To\\alas-launcher.exe\" --start-minimized",
+        "version": "3.0.7.0",
+        "company": "taiho",
+        "signer_column": "taiho",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) taiho",
+        "merged_rules": [
+          "AUTORUNS_SIG_INVALID"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_INVALID"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Path\\To\\rarext.dll",
+      "detail": "数字签名无效：TRUST_E_BAD_DIGEST：文件内容与签名摘要不符（可能被篡改）",
+      "evidence": {
+        "entry_location": "HKLM\\Software\\Classes\\Folder\\ShellEx\\DragDropHandlers",
+        "entry": "WinRAR",
+        "autoruns_category": "Explorer",
+        "enabled": "enabled",
+        "description": "WinRAR 外壳扩展",
+        "image_path": "C:\\Path\\To\\rarext.dll",
+        "launch_string": "C:\\Path\\To\\rarext.dll",
+        "version": "7.22.0.0",
+        "company": "Alexander Roshal",
+        "signer_column": "Alexander Roshal",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) Alexander Roshal",
+        "path": "C:\\Path\\To\\rarext.dll",
+        "signature": {
+          "status": "invalid",
+          "signer": null,
+          "error": "TRUST_E_BAD_DIGEST：文件内容与签名摘要不符（可能被篡改）",
+          "via": "embedded"
+        },
+        "pe": {
+          "OriginalFilename": "RarExt.dll",
+          "CompanyName": "Alexander Roshal",
+          "FileDescription": "WinRAR 外壳扩展",
+          "InternalName": "WinRAR 外壳扩展",
+          "ProductName": "WinRAR",
+          "FileVersion": "7.22.0"
+        },
+        "merged_rules": [
+          "AUTORUNS_SIG_INVALID"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_INVALID"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Program Files\\WindowsApps\\ExampleApp_1.0.0.0_x64__examplepublisher\\example.exe",
+      "detail": "可执行文件没有数字签名，无法验证来源可信",
+      "evidence": {
+        "entry_location": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData",
+        "entry": "ExampleApp",
+        "autoruns_category": "Packaged Apps",
+        "enabled": "disabled",
+        "description": "Startup Task: ExampleAppAppStartUpId",
+        "image_path": "C:\\Program Files\\WindowsApps\\ExampleApp_1.0.0.0_x64__examplepublisher\\example.exe",
+        "launch_string": "Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\7EE7776C.ExampleAppforWindows_w1wdnht996qgy\\ExampleAppAppStartUpId",
+        "version": "0.1.0.0",
+        "company": "ExampleApp",
+        "signer_column": "ExampleApp",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) ExampleApp",
+        "path": "C:\\Program Files\\WindowsApps\\ExampleApp_1.0.0.0_x64__examplepublisher\\example.exe",
+        "signature": {
+          "status": "unsigned",
+          "signer": null,
+          "error": "TRUST_E_NOSIGNATURE：文件没有数字签名",
+          "via": null
+        },
+        "pe": {
+          "OriginalFilename": "ExampleApp.dll",
+          "CompanyName": "ExampleApp",
+          "FileDescription": "ExampleApp",
+          "InternalName": "ExampleApp.dll",
+          "ProductName": "ExampleApp",
+          "FileVersion": "0.1.0-dule-release-v3-0-43.185"
+        },
+        "merged_rules": [
+          "AUTORUNS_SIG_UNSIGNED"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Path\\To\\ExampleTool.exe",
+      "detail": "可执行文件没有数字签名，无法验证来源可信",
+      "evidence": {
+        "path": "C:\\Path\\To\\ExampleTool.exe",
+        "signature": {
+          "status": "unsigned",
+          "signer": null,
+          "error": "TRUST_E_NOSIGNATURE：文件没有数字签名",
+          "via": null
+        },
+        "pe": {
+          "OriginalFilename": "ExampleTool.dll",
+          "CompanyName": "ExampleTool Plus",
+          "FileDescription": "ExampleTool",
+          "InternalName": "ExampleTool.dll",
+          "ProductName": "ExampleTool Plus",
+          "FileVersion": "1.6.0.0"
+        },
+        "registry": {
+          "key": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run（默认视图 位视图）",
+          "value_name": "ExampleTool.Independent",
+          "command": "\"C:\\Path\\To\\ExampleTool.exe\" --autostart",
+          "executable": "C:\\Path\\To\\ExampleTool.exe",
+          "value_type": 1
+        },
+        "entry_location": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "entry": "ExampleTool.Independent",
+        "autoruns_category": "Logon",
+        "enabled": "enabled",
+        "description": "ExampleTool",
+        "image_path": "C:\\Path\\To\\ExampleTool.exe",
+        "launch_string": "\"C:\\Path\\To\\ExampleTool.exe\" --autostart",
+        "version": "1.6.0.0",
+        "company": "ExampleTool Plus",
+        "signer_column": "ExampleTool Plus",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) ExampleTool Plus",
+        "merged_rules": [
+          "AUTORUNS_SIG_UNSIGNED"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Path\\To\\ExampleDownloader.exe",
+      "detail": "可执行文件没有数字签名，无法验证来源可信",
+      "evidence": {
+        "path": "C:\\Path\\To\\ExampleDownloader.exe",
+        "signature": {
+          "status": "unsigned",
+          "signer": null,
+          "error": "TRUST_E_NOSIGNATURE：文件没有数字签名",
+          "via": null
+        },
+        "pe": {
+          "OriginalFilename": "ExampleDownloader.exe",
+          "CompanyName": "NeatDownloadManager",
+          "FileDescription": "ExampleDownloader (ExampleDownloader)",
+          "InternalName": "NeatDownloadManager",
+          "ProductName": "ExampleDownloader (ExampleDownloader)",
+          "FileVersion": "1.4.24.0"
+        },
+        "registry": {
+          "key": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run（默认视图 位视图）",
+          "value_name": "ExampleDownloader",
+          "command": "C:\\Path\\To\\ExampleDownloader.exe -autostart",
+          "executable": "C:\\Path\\To\\ExampleDownloader.exe",
+          "value_type": 1
+        },
+        "entry_location": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "entry": "ExampleDownloader",
+        "autoruns_category": "Logon",
+        "enabled": "enabled",
+        "description": "ExampleDownloader (ExampleDownloader)",
+        "image_path": "C:\\Path\\To\\ExampleDownloader.exe",
+        "launch_string": "C:\\Path\\To\\ExampleDownloader.exe -autostart",
+        "version": "1.4.24.0",
+        "company": "NeatDownloadManager",
+        "signer_column": "NeatDownloadManager",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) NeatDownloadManager",
+        "merged_rules": [
+          "AUTORUNS_SIG_UNSIGNED"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Path\\To\\7-zip.dll",
+      "detail": "可执行文件没有数字签名，无法验证来源可信",
+      "evidence": {
+        "entry_location": "HKLM\\Software\\Classes\\*\\ShellEx\\ContextMenuHandlers",
+        "entry": "7-Zip",
+        "autoruns_category": "Explorer",
+        "enabled": "enabled",
+        "description": "7-Zip Shell Extension",
+        "image_path": "C:\\Path\\To\\7-zip.dll",
+        "launch_string": "C:\\Path\\To\\7-zip.dll",
+        "version": "25.1.0.0",
+        "company": "Igor Pavlov",
+        "signer_column": "Igor Pavlov",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified) Igor Pavlov",
+        "path": "C:\\Path\\To\\7-zip.dll",
+        "signature": {
+          "status": "unsigned",
+          "signer": null,
+          "error": "TRUST_E_NOSIGNATURE：文件没有数字签名",
+          "via": null
+        },
+        "pe": {
+          "OriginalFilename": "7-zip.dll",
+          "CompanyName": "Igor Pavlov",
+          "FileDescription": "7-Zip Shell Extension",
+          "InternalName": "7-zip",
+          "ProductName": "7-Zip",
+          "FileVersion": "25.01"
+        },
+        "merged_rules": [
+          "AUTORUNS_SIG_UNSIGNED"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+      "detail": "自动启动项指向用户可写目录：C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+      "evidence": {
+        "entry_location": "HKCU\\Software\\Classes\\*\\ShellEx\\ContextMenuHandlers",
+        "entry": "ExampleBrowserAI.ContextMenu",
+        "autoruns_category": "Explorer",
+        "enabled": "enabled",
+        "description": "",
+        "image_path": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+        "launch_string": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+        "version": "",
+        "company": "ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "signer_column": "ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "merged_rules": [
+          "AUTORUNS_USERWRITABLE"
+        ]
+      },
+      "rule_id": "AUTORUNS_USERWRITABLE"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe",
+      "detail": "自动启动项指向用户可写目录：C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe",
+      "evidence": {
+        "key": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run（默认视图 位视图）",
+        "value_name": "ExampleBrowserUpdaterTaskUser1.0.0.21",
+        "command": "\"C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe\" --wake --enable-logging --vmodule=*/components/winhttp/*=1,*/components/update_client/*=2,*/chrome/updater/*=2,*/chrome/updater/quark/*=2,*/quark/utils/*=2",
+        "executable": "C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe",
+        "value_type": 1,
+        "entry_location": "Task Scheduler",
+        "entry": "\\ExampleBrowserUpdaterUser\\ExampleBrowserUpdater\\ExampleBrowserUpdaterTaskUser1.0.0.21{4F7FD0F4-39EC-455D-AA70-A9BCEAFC4E1A}",
+        "autoruns_category": "Scheduled Tasks",
+        "enabled": "enabled",
+        "description": "ExampleBrowserUpdater Task User 1.0.0.21",
+        "image_path": "C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe",
+        "launch_string": "C:\\Users\\User\\AppData\\Local\\ExampleBrowserUpdater\\ExampleBrowserUpdater\\1.0.0.21\\updater.exe --wake --enable-logging --vmodule=*/components/winhttp/*=1,*/components/update_client/*=2,*/chrome/updater/*=2,*/chrome/updater/quark/*=2,*/quark/utils/*=2",
+        "version": "1.0.0.21",
+        "company": "ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "signer_column": "ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) ALIBABA (CHINA) NETWORK TECHNOLOGY CO.,LTD.",
+        "merged_rules": [
+          "AUTORUNS_USERWRITABLE"
+        ]
+      },
+      "rule_id": "AUTORUNS_USERWRITABLE"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Autoruns",
+      "target": "C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\example.bat",
+      "detail": "自动启动项指向用户可写目录：C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\example.bat",
+      "evidence": {
+        "entry_location": "C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+        "entry": "example.bat",
+        "autoruns_category": "Logon",
+        "enabled": "enabled",
+        "description": "",
+        "image_path": "C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\example.bat",
+        "launch_string": "C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\example.bat",
+        "version": "",
+        "company": "",
+        "signer_column": "",
+        "signer_column_verified": false,
+        "signer_column_raw": "(Not verified) (Not Verified)",
+        "merged_rules": [
+          "AUTORUNS_USERWRITABLE"
+        ]
+      },
+      "rule_id": "AUTORUNS_USERWRITABLE"
+    },
+    {
+      "severity": "HIGH",
+      "category": "RegistryPolicy",
+      "target": "C:\\Users\\User\\AppData\\Local\\ExampleSandbox",
+      "detail": "Defender 排除路径位于用户可写目录：C:\\Users\\User\\AppData\\Local\\ExampleSandbox",
+      "evidence": {
+        "kind": "Paths",
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths",
+        "entry": "C:\\Users\\User\\AppData\\Local\\ExampleSandbox",
+        "view": "64",
+        "merged_rules": [
+          "DEFENDER_EXCLUSION"
+        ]
+      },
+      "rule_id": "DEFENDER_EXCLUSION"
+    },
+    {
+      "severity": "LOW",
+      "category": "COMHijack",
+      "target": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+      "detail": "用户可写目录注册的 COM 组件（已签名，非系统 CLSID 覆盖，需人工确认）：C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+      "evidence": {
+        "clsid": "{99D4E39A-EA7F-453E-9488-58C56BBF7B98}",
+        "key": "HKCU\\Software\\Classes\\CLSID\\{99D4E39A-EA7F-453E-9488-58C56BBF7B98}\\InprocServer32",
+        "inprocserver32": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+        "dll_path": "C:\\Users\\User\\AppData\\Local\\Programs\\Common\\ExampleBrowser\\example_shellext_20261105170615.dll",
+        "overrides_hklm": false,
+        "signature_rule": "",
+        "signature_signer": null,
+        "merged_rules": [
+          "COM_HIJACK_LOW"
+        ]
+      },
+      "rule_id": "COM_HIJACK_LOW"
+    },
+    {
+      "severity": "LOW",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "detail": "扩展 对话导出助手 权限风险评分 20（HIGH≥60，MEDIUM≥40）",
+      "evidence": {
+        "extension_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "extension_name": "对话导出助手",
+        "extension_name_raw": "对话导出助手",
+        "version": "0.3.0",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "UNPACKED",
+        "unpacked": true,
+        "extension_dir": "C:\\Path\\To\\Folder",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "activeTab",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "downloads",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "score_details": {
+          "score": 20.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "activeTab",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "downloads",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [],
+          "optional_host_permissions": [],
+          "attack_chains": [],
+          "severity": "LOW",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "merged_rules": [
+          "EXT_PERM_LOW"
+        ]
+      },
+      "rule_id": "EXT_PERM_LOW"
+    },
+    {
+      "severity": "INFO",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\System32\\ExampleOemService.exe",
+      "detail": "非微软签名的文件位于系统目录（签名者：SteelSeries France SASU）",
+      "evidence": {
+        "path": "C:\\Windows\\System32\\ExampleOemService.exe",
+        "signature": {
+          "status": "valid",
+          "signer": "SteelSeries France SASU",
+          "error": null,
+          "via": "embedded"
+        },
+        "pe": {
+          "OriginalFilename": "ExampleOem Service",
+          "CompanyName": "ExampleOem",
+          "InternalName": "ExampleOemService",
+          "ProductName": "ExampleOemService",
+          "FileVersion": "2.8.2.0"
+        },
+        "service": {
+          "service_name": "ExampleOemService",
+          "display_name": "ExampleOem service",
+          "path_name": "C:\\Windows\\System32\\ExampleOemService.exe",
+          "start_mode": "Auto",
+          "start_name": "LocalSystem",
+          "state": "Running",
+          "executable": "C:\\Windows\\System32\\ExampleOemService.exe"
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "masquerade_allow",
+          "value": "signer=SteelSeries France SASU path_prefix=C:\\Windows\\System32\\ status=valid"
+        },
+        "entry_location": "HKLM\\System\\CurrentControlSet\\Services",
+        "entry": "ExampleOemService",
+        "autoruns_category": "Services",
+        "enabled": "enabled",
+        "description": "ExampleOem service: ExampleOem service",
+        "image_path": "C:\\Windows\\System32\\ExampleOemService.exe",
+        "launch_string": "C:\\Windows\\System32\\ExampleOemService.exe",
+        "version": "2.8.2.0",
+        "company": "SteelSeries France SASU",
+        "signer_column": "SteelSeries France SASU",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) SteelSeries France SASU",
+        "merged_rules": [
+          "AUTORUNS_SIG_PATH_MASQUERADE"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+    },
+    {
+      "severity": "INFO",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\System32\\ExampleOemSvc64.exe",
+      "detail": "非微软签名的文件位于系统目录（签名者：SteelSeries France SASU）",
+      "evidence": {
+        "path": "C:\\Windows\\System32\\ExampleOemSvc64.exe",
+        "signature": {
+          "status": "valid",
+          "signer": "SteelSeries France SASU",
+          "error": null,
+          "via": "embedded"
+        },
+        "pe": {
+          "OriginalFilename": "ExampleOem Service",
+          "CompanyName": "ExampleOem",
+          "InternalName": "ExampleOemService",
+          "ProductName": "ExampleOemService",
+          "FileVersion": "2.8.2.0"
+        },
+        "task": {
+          "task_name": "ExampleOemTask64",
+          "task_path": "\\",
+          "task_label": "\\ExampleOemTask64",
+          "user_id": null,
+          "logon_type": 4,
+          "run_level": 0,
+          "state": 4,
+          "action_index": 0,
+          "execute": "C:\\Windows\\System32\\.\\ExampleOemSvc64.exe",
+          "arguments": "$(Arg0) $(Arg1) $(Arg2) $(Arg3) $(Arg4) $(Arg5) $(Arg6) $(Arg7)",
+          "executable": "C:\\Windows\\System32\\ExampleOemSvc64.exe"
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "masquerade_allow",
+          "value": "signer=SteelSeries France SASU path_prefix=C:\\Windows\\System32\\ status=valid"
+        },
+        "entry_location": "Task Scheduler",
+        "entry": "\\ExampleOemTask64",
+        "autoruns_category": "Scheduled Tasks",
+        "enabled": "enabled",
+        "description": "ExampleOemSvc task",
+        "image_path": "C:\\Windows\\System32\\.\\ExampleOemSvc64.exe",
+        "launch_string": "C:\\Windows\\System32\\.\\ExampleOemSvc64.exe $(Arg0) $(Arg1) $(Arg2) $(Arg3) $(Arg4) $(Arg5) $(Arg6) $(Arg7)",
+        "version": "2.8.2.0",
+        "company": "SteelSeries France SASU",
+        "signer_column": "SteelSeries France SASU",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) SteelSeries France SASU",
+        "merged_rules": [
+          "AUTORUNS_SIG_PATH_MASQUERADE"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+    },
+    {
+      "severity": "INFO",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\system32\\ExamplePlugins\\ExamplePlugin.sys",
+      "detail": "非微软签名的文件位于系统目录（签名者：NVIDIA Corporation）",
+      "evidence": {
+        "entry_location": "HKLM\\System\\CurrentControlSet\\Services",
+        "entry": "FvKMDSvc",
+        "autoruns_category": "Drivers",
+        "enabled": "enabled",
+        "description": "FvKMDSvc:",
+        "image_path": "C:\\Windows\\system32\\ExamplePlugins\\ExamplePlugin.sys",
+        "launch_string": "C:\\Windows\\system32\\ExamplePlugins\\ExamplePlugin.sys",
+        "version": "",
+        "company": "NVIDIA Corporation",
+        "signer_column": "NVIDIA Corporation",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) NVIDIA Corporation",
+        "path": "C:\\Windows\\system32\\ExamplePlugins\\ExamplePlugin.sys",
+        "signature": {
+          "status": "valid",
+          "signer": "NVIDIA Corporation",
+          "error": null,
+          "via": "embedded"
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "masquerade_allow",
+          "value": "signer=NVIDIA Corporation path_prefix=C:\\Windows\\System32\\ status=valid"
+        },
+        "merged_rules": [
+          "AUTORUNS_SIG_PATH_MASQUERADE"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+    },
+    {
+      "severity": "INFO",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\SysWOW64\\MsiService.exe",
+      "detail": "非微软签名的文件位于系统目录（签名者：ExampleOem International CO., LTD.）",
+      "evidence": {
+        "path": "C:\\Windows\\SysWOW64\\MsiService.exe",
+        "signature": {
+          "status": "valid",
+          "signer": "ExampleOem International CO., LTD.",
+          "error": null,
+          "via": "embedded"
+        },
+        "pe": {
+          "OriginalFilename": "Service2.exe",
+          "CompanyName": "ExampleOem International Co., Ltd.",
+          "FileDescription": "ExampleOemScmService",
+          "InternalName": "Service2",
+          "ProductName": "ExampleOemScmService",
+          "FileVersion": "1, 0, 10, 0"
+        },
+        "service": {
+          "service_name": "ExampleOemScm",
+          "display_name": "ExampleOemScm",
+          "path_name": "\"C:\\Windows\\SysWOW64\\MsiService.exe\"",
+          "start_mode": "Auto",
+          "start_name": "LocalSystem",
+          "state": "Running",
+          "executable": "C:\\Windows\\SysWOW64\\MsiService.exe"
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "masquerade_allow",
+          "value": "signer=ExampleOem International CO., LTD. path_prefix=C:\\Windows\\SysWOW64\\ status=valid"
+        },
+        "entry_location": "HKLM\\System\\CurrentControlSet\\Services",
+        "entry": "ExampleOemScm",
+        "autoruns_category": "Services",
+        "enabled": "enabled",
+        "description": "ExampleOemScm: ExampleOemScmService",
+        "image_path": "C:\\Windows\\SysWOW64\\MsiService.exe",
+        "launch_string": "\"C:\\Windows\\SysWOW64\\MsiService.exe\"",
+        "version": "1.0.10.0",
+        "company": "ExampleOem International CO., LTD.",
+        "signer_column": "ExampleOem International CO., LTD.",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) ExampleOem International CO., LTD.",
+        "merged_rules": [
+          "AUTORUNS_SIG_PATH_MASQUERADE"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+    },
+    {
+      "severity": "INFO",
+      "category": "Autoruns",
+      "target": "C:\\Windows\\SysWOW64\\ExampleOemSvc32.exe",
+      "detail": "非微软签名的文件位于系统目录（签名者：SteelSeries France SASU）",
+      "evidence": {
+        "path": "C:\\Windows\\SysWOW64\\ExampleOemSvc32.exe",
+        "signature": {
+          "status": "valid",
+          "signer": "SteelSeries France SASU",
+          "error": null,
+          "via": "embedded"
+        },
+        "pe": {
+          "OriginalFilename": "ExampleOem Service",
+          "CompanyName": "ExampleOem",
+          "InternalName": "ExampleOemService",
+          "ProductName": "ExampleOemService",
+          "FileVersion": "2.8.2.0"
+        },
+        "task": {
+          "task_name": "ExampleOemTask32",
+          "task_path": "\\",
+          "task_label": "\\ExampleOemTask32",
+          "user_id": null,
+          "logon_type": 4,
+          "run_level": 0,
+          "state": 4,
+          "action_index": 0,
+          "execute": "C:\\Windows\\System32\\..\\SysWOW64\\ExampleOemSvc32.exe",
+          "arguments": "$(Arg0) $(Arg1) $(Arg2) $(Arg3) $(Arg4) $(Arg5) $(Arg6) $(Arg7)",
+          "executable": "C:\\Windows\\SysWOW64\\ExampleOemSvc32.exe"
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "masquerade_allow",
+          "value": "signer=SteelSeries France SASU path_prefix=C:\\Windows\\SysWOW64\\ status=valid"
+        },
+        "entry_location": "Task Scheduler",
+        "entry": "\\ExampleOemTask32",
+        "autoruns_category": "Scheduled Tasks",
+        "enabled": "enabled",
+        "description": "ExampleOemSvc task",
+        "image_path": "C:\\Windows\\System32\\..\\SysWOW64\\ExampleOemSvc32.exe",
+        "launch_string": "C:\\Windows\\System32\\..\\SysWOW64\\ExampleOemSvc32.exe $(Arg0) $(Arg1) $(Arg2) $(Arg3) $(Arg4) $(Arg5) $(Arg6) $(Arg7)",
+        "version": "2.8.2.0",
+        "company": "SteelSeries France SASU",
+        "signer_column": "SteelSeries France SASU",
+        "signer_column_verified": true,
+        "signer_column_raw": "(Verified) SteelSeries France SASU",
+        "merged_rules": [
+          "AUTORUNS_SIG_PATH_MASQUERADE"
+        ]
+      },
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "detail": "扩展 AdGuard AdBlocker 权限风险评分 110（HIGH≥60，MEDIUM≥40）；命中攻击链：session_theft(+20)、script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "extension_name": "AdGuard AdBlocker",
+        "extension_name_raw": "__MSG_name__",
+        "version": "5.5.3.52",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\\5.5.3.52_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": true,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "unlimitedStorage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequestFeedback",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "userScripts",
+            "weight": 25.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "privacy",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "session_theft",
+            "bonus": 20,
+            "description": "会话令牌窃取组合（cookies+tabs+storage）"
+          },
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 110,
+        "score_base": 65,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\\5.5.3.52_0\\_metadata\\verified_contents.json",
+          "item_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "item_version": "5.5.3.52",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 110.0,
+          "base_score": 65.0,
+          "required_permissions": [
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "unlimitedStorage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequestFeedback",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "userScripts",
+              "weight": 25.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "privacy",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "session_theft",
+              "bonus": 20,
+              "description": "会话令牌窃取组合（cookies+tabs+storage）"
+            },
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "HIGH",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb（评分 110 ≤ 白名单上限 130）"
+        },
+        "merged_rules": [
+          "EXT_PERM_HIGH"
+        ]
+      },
+      "rule_id": "EXT_PERM_HIGH"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/cccccccccccccccccccccccccccccccc",
+      "detail": "扩展 Tampermonkey 权限风险评分 130（HIGH≥60，MEDIUM≥40）；命中攻击链：session_theft(+20)、script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "cccccccccccccccccccccccccccccccc",
+        "extension_name": "Tampermonkey",
+        "extension_name_raw": "__MSG_extName__",
+        "version": "5.5.1",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\cccccccccccccccccccccccccccccccc\\5.5.1_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "notifications",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "unlimitedStorage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "idle",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequestBlocking",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "clipboardWrite",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "alarms",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequestWithHostAccess",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "userScripts",
+            "weight": 25.0,
+            "kind": "required"
+          },
+          {
+            "name": "offscreen",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "downloads",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "chrome://favicon/",
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "session_theft",
+            "bonus": 20,
+            "description": "会话令牌窃取组合（cookies+tabs+storage）"
+          },
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 130,
+        "score_base": 85,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\cccccccccccccccccccccccccccccccc\\5.5.1_0\\_metadata\\verified_contents.json",
+          "item_id": "cccccccccccccccccccccccccccccccc",
+          "item_version": "5.5.1",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 130.0,
+          "base_score": 85.0,
+          "required_permissions": [
+            {
+              "name": "notifications",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "unlimitedStorage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "idle",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequestBlocking",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "clipboardWrite",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "alarms",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequestWithHostAccess",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "userScripts",
+              "weight": 25.0,
+              "kind": "required"
+            },
+            {
+              "name": "offscreen",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "downloads",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "chrome://favicon/",
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "session_theft",
+              "bonus": 20,
+              "description": "会话令牌窃取组合（cookies+tabs+storage）"
+            },
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "HIGH",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "cccccccccccccccccccccccccccccccc（评分 130 ≤ 白名单上限 140）"
+        },
+        "merged_rules": [
+          "EXT_PERM_HIGH"
+        ]
+      },
+      "rule_id": "EXT_PERM_HIGH"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/dddddddddddddddddddddddddddddddd",
+      "detail": "扩展 AdGuard AdBlocker 权限风险评分 110（HIGH≥60，MEDIUM≥40）；命中攻击链：session_theft(+20)、script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "dddddddddddddddddddddddddddddddd",
+        "extension_name": "AdGuard AdBlocker",
+        "extension_name_raw": "__MSG_name__",
+        "version": "5.5.3.52",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\dddddddddddddddddddddddddddddddd\\5.5.3.52_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "unlimitedStorage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequestFeedback",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "userScripts",
+            "weight": 25.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "privacy",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "session_theft",
+            "bonus": 20,
+            "description": "会话令牌窃取组合（cookies+tabs+storage）"
+          },
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 110,
+        "score_base": 65,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\dddddddddddddddddddddddddddddddd\\5.5.3.52_0\\_metadata\\verified_contents.json",
+          "item_id": "dddddddddddddddddddddddddddddddd",
+          "item_version": "5.5.3.52",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 110.0,
+          "base_score": 65.0,
+          "required_permissions": [
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "unlimitedStorage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequestFeedback",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "userScripts",
+              "weight": 25.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "privacy",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "session_theft",
+              "bonus": 20,
+              "description": "会话令牌窃取组合（cookies+tabs+storage）"
+            },
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "HIGH",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "dddddddddddddddddddddddddddddddd（评分 110 ≤ 白名单上限 130）"
+        },
+        "merged_rules": [
+          "EXT_PERM_HIGH"
+        ]
+      },
+      "rule_id": "EXT_PERM_HIGH"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "detail": "扩展 NeatDownloadManager Extension 权限风险评分 20（HIGH≥60，MEDIUM≥40）",
+      "evidence": {
+        "extension_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "extension_name": "NeatDownloadManager Extension",
+        "extension_name_raw": "NeatDownloadManager Extension",
+        "version": "1.9.92",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\\1.9.92_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": true,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "downloads",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\\1.9.92_0\\_metadata\\verified_contents.json",
+          "item_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "item_version": "1.9.92",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 20.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "downloads",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [],
+          "severity": "LOW",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee（评分 20 ≤ 白名单上限 30）"
+        },
+        "merged_rules": [
+          "EXT_PERM_LOW"
+        ]
+      },
+      "rule_id": "EXT_PERM_LOW"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/ffffffffffffffffffffffffffffffff",
+      "detail": "扩展 YouTube Auto HD + FPS 权限风险评分 20（HIGH≥60，MEDIUM≥40）",
+      "evidence": {
+        "extension_id": "ffffffffffffffffffffffffffffffff",
+        "extension_name": "YouTube Auto HD + FPS",
+        "extension_name_raw": "YouTube Auto HD + FPS",
+        "version": "1.19.1",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\ffffffffffffffffffffffffffffffff\\1.19.1_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": true,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [
+          "https://youtube.com/*",
+          "https://*.youtube.com/*",
+          "https://www.youtube-nocookie.com/*",
+          "https://youtube.googleapis.com/*"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\ffffffffffffffffffffffffffffffff\\1.19.1_0\\_metadata\\verified_contents.json",
+          "item_id": "ffffffffffffffffffffffffffffffff",
+          "item_version": "1.19.1",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 20.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [
+            "https://youtube.com/*",
+            "https://*.youtube.com/*",
+            "https://www.youtube-nocookie.com/*",
+            "https://youtube.googleapis.com/*"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [],
+          "severity": "LOW",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "ffffffffffffffffffffffffffffffff（评分 20 ≤ 白名单上限 30）"
+        },
+        "merged_rules": [
+          "EXT_PERM_LOW"
+        ]
+      },
+      "rule_id": "EXT_PERM_LOW"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/gggggggggggggggggggggggggggggggg",
+      "detail": "扩展 SuperCopy Pro - Free Copy 权限风险评分 20（HIGH≥60，MEDIUM≥40）",
+      "evidence": {
+        "extension_id": "gggggggggggggggggggggggggggggggg",
+        "extension_name": "SuperCopy Pro - Free Copy",
+        "extension_name_raw": "__MSG_name__",
+        "version": "1.1.20",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\gggggggggggggggggggggggggggggggg\\1.1.20_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [
+          "https://*/*",
+          "http://*/*",
+          "file://*/*"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\gggggggggggggggggggggggggggggggg\\1.1.20_0\\_metadata\\verified_contents.json",
+          "item_id": "gggggggggggggggggggggggggggggggg",
+          "item_version": "1.1.20",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 20.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [
+            "https://*/*",
+            "http://*/*",
+            "file://*/*"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [],
+          "severity": "LOW",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "gggggggggggggggggggggggggggggggg（评分 20 ≤ 白名单上限 30）"
+        },
+        "merged_rules": [
+          "EXT_PERM_LOW"
+        ]
+      },
+      "rule_id": "EXT_PERM_LOW"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+      "detail": "扩展 NeatDownloadManager Extension 权限风险评分 20（HIGH≥60，MEDIUM≥40）",
+      "evidence": {
+        "extension_id": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+        "extension_name": "NeatDownloadManager Extension",
+        "extension_name_raw": "NeatDownloadManager Extension",
+        "version": "1.9.91",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh\\1.9.91_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "downloads",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh\\1.9.91_0\\_metadata\\verified_contents.json",
+          "item_id": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+          "item_version": "1.9.91",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 20.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "downloads",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [],
+          "severity": "LOW",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh（评分 20 ≤ 白名单上限 30）"
+        },
+        "merged_rules": [
+          "EXT_PERM_LOW"
+        ]
+      },
+      "rule_id": "EXT_PERM_LOW"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+      "detail": "扩展 KISS Translator 权限风险评分 45（HIGH≥60，MEDIUM≥40）；命中攻击链：script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+        "extension_name": "KISS Translator",
+        "extension_name_raw": "__MSG_app_name__",
+        "version": "2.1.1",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\\2.1.1_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": true,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "tts",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequestWithHostAccess",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "clipboardRead",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 45,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\\2.1.1_0\\_metadata\\verified_contents.json",
+          "item_id": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+          "item_version": "2.1.1",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 45.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "tts",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequestWithHostAccess",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "clipboardRead",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "MEDIUM",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii（评分 45 ≤ 白名单上限 50）"
+        },
+        "merged_rules": [
+          "EXT_PERM_MED"
+        ]
+      },
+      "rule_id": "EXT_PERM_MED"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj",
+      "detail": "扩展 DeepL: translate and write with AI 权限风险评分 57.5（HIGH≥60，MEDIUM≥40）；命中攻击链：session_theft(+20)",
+      "evidence": {
+        "extension_id": "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj",
+        "extension_name": "DeepL: translate and write with AI",
+        "extension_name_raw": "__MSG_appName__",
+        "version": "1.107.0",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj\\1.107.0_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": true,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "activeTab",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "identity",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "tts",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "alarms",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "cookies",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "sidePanel",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "nativeMessaging",
+            "base_weight": 35.0,
+            "weight": 17.5,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "*://*.deepl.com/*",
+          "https://api-test.deepl.com/v1/*",
+          "https://api.deepl.com/v1/*"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "session_theft",
+            "bonus": 20,
+            "description": "会话令牌窃取组合（cookies+tabs+storage）"
+          }
+        ],
+        "score": 57.5,
+        "score_base": 37.5,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj\\1.107.0_0\\_metadata\\verified_contents.json",
+          "item_id": "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj",
+          "item_version": "1.107.0",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 57.5,
+          "base_score": 37.5,
+          "required_permissions": [
+            {
+              "name": "activeTab",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "identity",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "tts",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "alarms",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "cookies",
+              "weight": 20.0,
+              "kind": "required"
+            },
+            {
+              "name": "sidePanel",
+              "weight": 0.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "nativeMessaging",
+              "base_weight": 35.0,
+              "weight": 17.5,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "*://*.deepl.com/*",
+            "https://api-test.deepl.com/v1/*",
+            "https://api.deepl.com/v1/*"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "session_theft",
+              "bonus": 20,
+              "description": "会话令牌窃取组合（cookies+tabs+storage）"
+            }
+          ],
+          "severity": "MEDIUM",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj（评分 57 ≤ 白名单上限 60）"
+        },
+        "merged_rules": [
+          "EXT_PERM_MED"
+        ]
+      },
+      "rule_id": "EXT_PERM_MED"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "detail": "扩展 强力网页视频下载 权限风险评分 45（HIGH≥60，MEDIUM≥40）；命中攻击链：script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "extension_name": "强力网页视频下载",
+        "extension_name_raw": "强力网页视频下载",
+        "version": "3.5.6",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\\3.5.6_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "tabs",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "downloads",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webNavigation",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "alarms",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [
+          "*://*/*",
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 45,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\\3.5.6_0\\_metadata\\verified_contents.json",
+          "item_id": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+          "item_version": "3.5.6",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 45.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "tabs",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "downloads",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webNavigation",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "alarms",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [],
+          "host_permissions": [
+            "*://*/*",
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "MEDIUM",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk（评分 45 ≤ 白名单上限 50）"
+        },
+        "merged_rules": [
+          "EXT_PERM_MED"
+        ]
+      },
+      "rule_id": "EXT_PERM_MED"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Edge/Default/llllllllllllllllllllllllllllllll",
+      "detail": "扩展 划词翻译 权限风险评分 45（HIGH≥60，MEDIUM≥40）；命中攻击链：script_injection_broad(+25)",
+      "evidence": {
+        "extension_id": "llllllllllllllllllllllllllllllll",
+        "extension_name": "划词翻译",
+        "extension_name_raw": "__MSG_name__",
+        "version": "11.9.1",
+        "browser": "Edge",
+        "profile": "Default",
+        "location": "INTERNAL",
+        "unpacked": false,
+        "extension_dir": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\llllllllllllllllllllllllllllllll\\11.9.1_0",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "contextMenus",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "storage",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "clipboardWrite",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "clipboardRead",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "webRequest",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "alarms",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "offscreen",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "declarativeNetRequestWithHostAccess",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [
+          {
+            "name": "notifications",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          },
+          {
+            "name": "background",
+            "base_weight": 0.0,
+            "weight": 0.0,
+            "kind": "optional"
+          }
+        ],
+        "host_permissions": [
+          "<all_urls>"
+        ],
+        "optional_host_permissions": [],
+        "attack_chains": [
+          {
+            "id": "script_injection_broad",
+            "bonus": 25,
+            "description": "全站脚本注入（scripting + 全站主机权限）"
+          }
+        ],
+        "score": 45,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "verified_contents": {
+          "path": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Extensions\\llllllllllllllllllllllllllllllll\\11.9.1_0\\_metadata\\verified_contents.json",
+          "item_id": "llllllllllllllllllllllllllllllll",
+          "item_version": "11.9.1",
+          "has_signature": true,
+          "content_hash_count": 0
+        },
+        "score_details": {
+          "score": 45.0,
+          "base_score": 20.0,
+          "required_permissions": [
+            {
+              "name": "contextMenus",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "storage",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "clipboardWrite",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "clipboardRead",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "webRequest",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "alarms",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "offscreen",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "declarativeNetRequestWithHostAccess",
+              "weight": 0.0,
+              "kind": "required"
+            },
+            {
+              "name": "scripting",
+              "weight": 20.0,
+              "kind": "required"
+            }
+          ],
+          "optional_permissions": [
+            {
+              "name": "notifications",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            },
+            {
+              "name": "background",
+              "base_weight": 0.0,
+              "weight": 0.0,
+              "kind": "optional"
+            }
+          ],
+          "host_permissions": [
+            "<all_urls>"
+          ],
+          "optional_host_permissions": [],
+          "attack_chains": [
+            {
+              "id": "script_injection_broad",
+              "bonus": 25,
+              "description": "全站脚本注入（scripting + 全站主机权限）"
+            }
+          ],
+          "severity": "MEDIUM",
+          "severity_floor": null,
+          "thresholds": {
+            "high": 60,
+            "medium": 40,
+            "low": 1
+          }
+        },
+        "whitelisted": true,
+        "whitelist_match": {
+          "type": "extensions",
+          "value": "llllllllllllllllllllllllllllllll（评分 45 ≤ 白名单上限 50）"
+        },
+        "merged_rules": [
+          "EXT_PERM_MED"
+        ]
+      },
+      "rule_id": "EXT_PERM_MED"
+    },
+    {
+      "severity": "INFO",
+      "category": "BrowserExtension",
+      "target": "Chrome/Default/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "detail": "扩展 对话导出助手 为开发者模式加载（无 Web Store 签名，请确认来源可信）",
+      "evidence": {
+        "extension_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "extension_name": "对话导出助手",
+        "extension_name_raw": "对话导出助手",
+        "version": "0.3.0",
+        "browser": "Chrome",
+        "profile": "Default",
+        "location": "UNPACKED",
+        "unpacked": true,
+        "extension_dir": "C:\\Path\\To\\Folder",
+        "preferences_source": "Secure Preferences",
+        "from_webstore": false,
+        "force_installed": false,
+        "permissions": [
+          {
+            "name": "activeTab",
+            "weight": 0.0,
+            "kind": "required"
+          },
+          {
+            "name": "scripting",
+            "weight": 20.0,
+            "kind": "required"
+          },
+          {
+            "name": "downloads",
+            "weight": 0.0,
+            "kind": "required"
+          }
+        ],
+        "optional_permissions": [],
+        "host_permissions": [],
+        "optional_host_permissions": [],
+        "attack_chains": [],
+        "score": 20,
+        "score_base": 20,
+        "thresholds": {
+          "high": 60,
+          "medium": 40,
+          "low": 1
+        },
+        "severity_floor": null,
+        "merged_rules": [
+          "EXT_UNPACKED"
+        ]
+      },
+      "rule_id": "EXT_UNPACKED"
+    },
+    {
+      "severity": "SKIPPED",
+      "category": "LOLBinProcess",
+      "target": "memory",
+      "detail": "内存扫描部分完成：已扫描 8 个进程，其它错误 2 个",
+      "evidence": {
+        "scanned_pids": [
+          3436,
+          5060,
+          5936,
+          13648,
+          15784,
+          17584,
+          18576,
+          20760
+        ],
+        "denied": [],
+        "errors": [
+          {
+            "pid": 5764,
+            "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb0 in position 24: invalid start byte"
+          },
+          {
+            "pid": 13212,
+            "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb0 in position 24: invalid start byte"
+          }
+        ],
+        "timed_out_pids": [],
+        "time_budget_seconds": 60,
+        "candidates": [
+          {
+            "pid": 3436,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "verge-mihomo.exe"
+          },
+          {
+            "pid": 5060,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "ExampleOem3.exe"
+          },
+          {
+            "pid": 5764,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "start_server.exe"
+          },
+          {
+            "pid": 5936,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "ExampleTool.exe"
+          },
+          {
+            "pid": 13212,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "start_server.exe"
+          },
+          {
+            "pid": 13648,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "python.exe"
+          },
+          {
+            "pid": 15784,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "python.exe"
+          },
+          {
+            "pid": 17584,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "WidgetService.exe"
+          },
+          {
+            "pid": 18576,
+            "score": 30,
+            "reasons": [
+              "签名状态 unsigned（+30）"
+            ],
+            "name": "python.exe"
+          },
+          {
+            "pid": 20760,
+            "score": 30,
+            "reasons": [
+              "签名状态 invalid（+30）"
+            ],
+            "name": "alas-launcher.exe"
+          }
+        ],
+        "engine": {
+          "yara_available": true,
+          "yara_version": "4.5.4",
+          "rules_compiled": [
+            "file_known_persistence.yar",
+            "memory_dotnet_reflective.yar",
+            "memory_powershell.yar"
+          ],
+          "rule_errors": [],
+          "skrapa_available": true,
+          "is_admin": true
+        },
+        "merged_rules": [
+          "MEMORY_SCAN_ERROR"
+        ]
+      },
+      "rule_id": "MEMORY_SCAN_ERROR"
+    }
+  ]
+}

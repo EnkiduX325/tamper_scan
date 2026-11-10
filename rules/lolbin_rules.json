@@ -1,0 +1,61 @@
+{
+  "_comment": "进程行为规则（阶段 6）。process_name_patterns 匹配进程文件名；cmdline_patterns 为进程命令行补充特征（core.utils 内置表仍生效，两者取并集）；parent_anomalies 定义'异常父进程派生子进程'的方向（宁窄勿宽）。severity 仅作记录，代码统一按规范等级映射。",
+  "process_name_patterns": [
+    {
+      "id": "credential_tool_name",
+      "regex": "(?i)^(mimikatz|mimidrv|mimilib|kiwi|pwdump|gsecdump|procdump64|wce|fgdump|lsasecretsdump)\\.exe$",
+      "severity": "HIGH",
+      "description": "凭据窃取/导出工具常见文件名（T1003）"
+    },
+    {
+      "id": "remote_exec_tool_name",
+      "regex": "(?i)^(psexec|paexec|smbexec|wmiexec|crackmapexec|netcat|ncat|socat|plink)\\.exe$",
+      "severity": "MEDIUM",
+      "description": "远程执行/横向移动工具文件名（T1021/T1570）"
+    },
+    {
+      "id": "hacktool_packer_name",
+      "regex": "(?i)^(upx|themida|vmprotect|enigma|aspack|mpress)\\.exe$",
+      "severity": "LOW",
+      "description": "加壳/打包工具文件名（需结合签名判断，仅作提示）"
+    }
+  ],
+  "cmdline_patterns": [
+    {
+      "id": "powershell_encoded",
+      "regex": "(?i)\\b(?:powershell|pwsh)(?:\\.exe)?\\b[^\\r\\n]*(?:-enc(?:odedcommand)?|-ec|-e)\\s+[A-Za-z0-9+/=]{20,}",
+      "severity": "HIGH",
+      "description": "PowerShell 编码/Base64 命令"
+    },
+    {
+      "id": "mshta_inline",
+      "regex": "(?i)\\bmshta(?:\\.exe)?\\b[^\\r\\n]*(?:javascript:|vbscript:|\\.hta)",
+      "severity": "HIGH",
+      "description": "mshta 执行内联/远程脚本"
+    },
+    {
+      "id": "regsvr32_scrobj",
+      "regex": "(?i)\\bregsvr32(?:\\.exe)?\\b[^\\r\\n]*(?:/i:https?:|scrobj\\.dll)",
+      "severity": "HIGH",
+      "description": "regsvr32 远程 COM 脚本"
+    }
+  ],
+  "parent_anomalies": [
+    {
+      "id": "wmi_execution",
+      "parent_names": ["wmiprvse.exe"],
+      "child_names": ["cmd.exe", "powershell.exe", "pwsh.exe", "mshta.exe", "rundll32.exe", "wscript.exe", "cscript.exe", "regsvr32.exe", "msbuild.exe", "installutil.exe"],
+      "severity": "HIGH",
+      "description": "WmiPrvSE.exe 派生 shell/解释器（WMI 执行，T1047）",
+      "reference": "T1047"
+    },
+    {
+      "id": "office_child_shell",
+      "parent_names": ["winword.exe", "excel.exe", "outlook.exe", "powerpnt.exe", "msaccess.exe"],
+      "child_names": ["cmd.exe", "powershell.exe", "pwsh.exe", "mshta.exe", "certutil.exe", "wscript.exe", "cscript.exe", "rundll32.exe", "regsvr32.exe", "bitsadmin.exe"],
+      "severity": "HIGH",
+      "description": "Office 进程派生 shell/系统工具（钓鱼利用，T1204.002）",
+      "reference": "T1204.002"
+    }
+  ]
+}

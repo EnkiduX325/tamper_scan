@@ -1,0 +1,36 @@
+{
+  "_comment": "浏览器扩展风险评分参数（阶段 5 外置，阶段 7 可直接调阈值而无需改代码）。score = Σ(required 权限权重) + Σ(optional 权限权重 × optional_weight_multiplier) + Σ(命中攻击链 bonus)。severity_floors 表示"单个权限就足以触发的最低等级"（debugger 可完全控制页面/网络，单权限即 HIGH）。",
+  "permission_weights": {
+    "debugger": 35,
+    "nativeMessaging": 35,
+    "userScripts": 25,
+    "cookies": 20,
+    "scripting": 20,
+    "webRequestBlocking": 20,
+    "proxy": 20
+  },
+  "optional_weight_multiplier": 0.5,
+  "attack_chain_bonuses": [
+    {
+      "id": "session_theft",
+      "requires_all": ["cookies", "tabs", "storage"],
+      "bonus": 20,
+      "description": "会话令牌窃取组合（cookies+tabs+storage）"
+    },
+    {
+      "id": "script_injection_broad",
+      "requires_all": ["scripting"],
+      "host_permissions_any": ["<all_urls>", "*://*/*"],
+      "bonus": 25,
+      "description": "全站脚本注入（scripting + 全站主机权限）"
+    }
+  ],
+  "severity_floors": {
+    "debugger": "HIGH"
+  },
+  "score_thresholds": {
+    "high": 60,
+    "medium": 40,
+    "low": 1
+  }
+}
