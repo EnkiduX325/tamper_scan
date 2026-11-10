@@ -23,6 +23,7 @@ svchost.exe 的签名会全部 valid，从而漏掉
 from __future__ import annotations
 
 import os
+import time
 import winreg
 from typing import Any
 
@@ -41,6 +42,47 @@ $services | Select-Object Name, DisplayName, PathName, StartMode, StartName, Sta
 
 # 服务名"自称系统组件"的强关键词（避免 Update/Driver 等泛词误报）
 _SYSTEM_CLAIM_KEYWORDS = ("microsoft", "windows", "defender", "system32", "winlogon", "lsass", "svchost")
+
+# 采集结果短时缓存：其它模块（如 unquoted_service_path）通过 collect_services(max_age_seconds>0)
+# 直接复用本模块的采集结果，避免同一次扫描重复执行 CIM 查询。
+_SERVICE_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None, "error": None}
+
+
+def clear_service_cache() -> None:
+    """清空服务采集缓存（测试或需要强制刷新时调用）。"""
+    _SERVICE_CACHE.update(timestamp=0.0, data=None, error=None)
+
+
+def collect_services(max_age_seconds: float = 0.0) -> tuple[Any, str | None]:
+    """采集 ``Win32_Service`` 原始 JSON 数据（唯一采集入口）。
+
+    Args:
+        max_age_seconds: >0 时允许复用该时限内的缓存（供其它模块复用采集结果）；
+            0 表示强制重新采集（``service.scan()`` 的默认行为）。
+
+    Returns:
+        ``(原始数据, 错误信息)``；失败时数据为 None，错误信息非空。
+    """
+    now = time.monotonic()
+    cached = _SERVICE_CACHE
+    if (
+        max_age_seconds > 0
+        and cached["data"] is not None
+        and now - float(cached["timestamp"] or 0.0) <= max_age_seconds
+    ):
+        return cached["data"], None
+    data, error = utils.run_powershell_json(_PS_SCRIPT, timeout=60)
+    _SERVICE_CACHE.update(timestamp=time.monotonic(), data=data, error=error)
+    return data, error
+
+
+def normalize_service_records(data: Any) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """把 CIM JSON 结果规范化为 ``list[dict]``；结构异常返回 ``(None, 原因)``。"""
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return None, f"服务 JSON 结构异常：{type(data).__name__}"
+    return [item for item in data if isinstance(item, dict)], None
 
 
 def _claims_system(name: str, display_name: str) -> bool:
@@ -159,7 +201,7 @@ def _analyze_service(service: dict[str, Any]) -> list[dict[str, Any]]:
 
 def scan() -> list[dict[str, Any]]:
     """采集并检查服务，返回 ``list[Finding]``。"""
-    data, error = utils.run_powershell_json(_PS_SCRIPT, timeout=60)
+    data, error = collect_services()
     if error:
         return [
             make_skipped(
@@ -170,22 +212,19 @@ def scan() -> list[dict[str, Any]]:
                 "SERVICE_SKIPPED",
             )
         ]
-    if isinstance(data, dict):
-        data = [data]
-    if not isinstance(data, list):
+    records, parse_error = normalize_service_records(data)
+    if parse_error or records is None:
         return [
             make_skipped(
                 CATEGORY,
                 "Win32_Service",
-                f"服务 JSON 结构异常：{type(data).__name__}",
+                parse_error or "服务 JSON 结构异常",
                 {"sample": truncate(data, 400)},
                 "SERVICE_PARSE_ERROR",
             )
         ]
 
     findings: list[dict[str, Any]] = []
-    for service in data:
-        if not isinstance(service, dict):
-            continue
+    for service in records:
         findings.extend(_analyze_service(service))
     return utils.apply_whitelist(findings)

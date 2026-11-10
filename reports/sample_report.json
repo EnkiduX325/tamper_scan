@@ -1,7 +1,7 @@
 {
   "tool": "TamperScan",
-  "version": "1.0.0",
-  "generated_at": "2026-01-01T00:00:00+00:00",
+  "version": "1.1.0",
+  "generated_at": "2026-11-10T14:49:40+00:00",
   "host": {
     "name": "TEST-PC",
     "os": "Windows-11-10.0.22631-SP0",
@@ -10,8 +10,8 @@
   },
   "scan": {
     "duration_seconds": 47.71,
-    "modules_total": 15,
-    "modules_available": 15,
+    "modules_total": 19,
+    "modules_available": 19,
     "modules": [
       {
         "name": "autoruns",
@@ -62,11 +62,43 @@
         "error": null
       },
       {
+        "name": "scheduled_task_hidden",
+        "label": "计划任务隐藏（Tarrask/Index）",
+        "stage": 7,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "wfp_filter",
+        "label": "WFP 持久化过滤器（EDR Silencer）",
+        "stage": 7,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
+        "name": "credential_rdp",
+        "label": "凭证与 RDP 后门（NetworkProvider）",
+        "stage": 7,
+        "status": "ok",
+        "count": 0,
+        "error": null
+      },
+      {
         "name": "service",
         "label": "系统服务",
         "stage": 4,
         "status": "ok",
         "count": 2,
+        "error": null
+      },
+      {
+        "name": "unquoted_service_path",
+        "label": "未加引号服务路径提权",
+        "stage": 7,
+        "status": "ok",
+        "count": 0,
         "error": null
       },
       {

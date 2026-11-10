@@ -7,8 +7,105 @@
 
 ### 计划中
 
-- 增加 `tests/` 下的纯函数单元测试与 GitHub Actions CI；
-- 扩展 Web Store 哈希比对与权限变化（diff）能力。
+- 扩展 Web Store 哈希比对与权限变化（diff）能力；
+- 模块 1 后续增强：只删改部分 `SD` 的结构校验（Tarrask 变体）；
+- 模块 2 后续增强：IPv6 远端地址（`FWP_BYTE_ARRAY16` 指针）解析与 NDR 布局跨版本兼容；
+- 模块 3 后续增强：RDP 配置类后门（`fDenyTSConnections` / 端口 / 影子会话等）。
+
+## [1.1.0] - 2026-11-10
+
+V1.1「高级威胁检测」：在 1.0.0 的 15 个模块基础上新增 **4 个红队维度检测模块**（计划任务隐藏、
+WFP 持久化过滤器 / EDR Silencer、凭证与 RDP 后门、未加引号服务路径），模块总数 **19**；
+新增 **140 条单元测试**并接入 CI（`python -m pytest -q`）。
+
+### Added
+
+- **V1.1 高级威胁检测 · 模块 1：计划任务隐藏检测（Tarrask）**
+  - 新增 `modules/scheduled_task_hidden.py`：递归遍历
+    `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree`，
+    子键缺少 `SD` 值（或为空/非二进制）或 `Index` 为 `0x0` 时上报 **HIGH
+    `TASK_HIDDEN_TARRASK`**；对可疑节点追加读取 `TaskCache\Tasks\<GUID>` 的
+    `Actions` 命令行作为 evidence（T1053.005 / T1685）。
+  - 采集失败按项目约定降级：`TASK_HIDDEN_ACCESS_DENIED`（标准用户读不到 TaskCache）、
+    `TASK_HIDDEN_SKIPPED`、`TASK_HIDDEN_PARTIAL`（部分子键读取失败），不抛异常。
+  - 降噪：`Index==0` 但无对应 `Tasks\<Id>` 定义的历史残留键默认降为 MEDIUM
+    （模块常量 `STALE_INDEX_ZERO_SEVERITY`，可改回 `"HIGH"`），evidence 附
+    `stale_candidate` 与 `Tasks` 动作命令行，便于人工确认。
+  - `core/scanner.py` 注册第 16 个模块（阶段 7），CLI/GUI 自动纳入扫描与
+    `--list-modules`。
+
+- **V1.1 高级威胁检测 · 模块 2：WFP 持久化过滤器检测（EDR Silencer）**
+  - 新增 `modules/wfp_filter.py`：读取
+    `HKLM\SYSTEM\CurrentControlSet\Services\BFE\Parameters\Policy\Persistent\Filter`，
+    按 BFE 持久化对象格式（16 字节头 + NDR 编码的 `BFE_PERSISTENT_OBJECT`）解析二进制，
+    用 `FWPM_FILTER0` 字段偏移定位过滤器结构，并扫描 condition 记录还原远端 IP/端口/应用条件。
+  - 规则：`WFP_EDR_SILENCER` HIGH（出站层 + BLOCK + ALE_APP_ID）、
+    `WFP_BLOCK_PUBLIC_IP` HIGH（阻断公网 IPv4）、`WFP_BLOCK_REMOTE_PORT` HIGH
+    （阻断出站远端端口）、`WFP_BLOCK_FILTER` MEDIUM（其它非系统阻断过滤器）。
+  - 系统过滤器（`FWPM_SUBLAYER_MPSSVC_*` 子层或 `@...` 资源显示名）自动跳过；
+    解析失败的二进制记 `SKIPPED / WFP_FILTER_UNPARSED`（未检查 ≠ 安全）。
+  - 降级：`WFP_ACCESS_DENIED`（标准用户读不到 BFE Policy）、`WFP_SKIPPED`、`WFP_PARTIAL`。
+  - `core/scanner.py` 注册第 17 个模块（阶段 7）。
+
+- **V1.1 高级威胁检测 · 模块 3：凭证与 RDP 后门检测**
+  - 新增 `modules/credential_rdp.py`：检测
+    `HKLM\SYSTEM\CurrentControlSet\Control\NetworkProvider\Order` 的 `ProviderOrder`
+    是否被插入陌生/被替换的 Network Provider（对照微软基线
+    `RDPNP/P9NP/LanmanWorkstation/webclient`，校验 `ProviderPath` 的基线 DLL、系统目录、
+    用户可写目录、文件存在性与微软签名），并交叉校验 `Order` 与 `HwOrder`；
+  - 检测 `Services\TermService\Parameters` 的 `ServiceDll`：系统目录外、用户可写目录、
+    文件名不是 `termsrv.dll`、文件缺失、无签名/签名无效、非微软签名 → HIGH
+    `RDP_SERVICEDLL_TAMPER`；值缺失 → MEDIUM `RDP_SERVICEDLL_ABSENT`；
+  - 规则：`NP_PROVIDER_TAMPER` / `NP_UNKNOWN_PROVIDER`（LOW，系统目录 + 微软签名）/
+    `NP_ORDER_MISMATCH` / `NP_ORDER_ABSENT`；网络提供者与 RDP 两部分**独立降级**
+    （`NP_ACCESS_DENIED` / `RDP_ACCESS_DENIED`），实测标准用户通常可读这两处键；
+  - `core/scanner.py` 注册第 18 个模块（阶段 7）。
+
+- **V1.1 高级威胁检测 · 模块 4：未加引号的服务路径提权（Unquoted Service Path）**
+  - 新增 `modules/unquoted_service_path.py`：**复用 `service` 模块的 CIM 采集结果**
+    （`service.collect_services(max_age_seconds=180)` 短时缓存，同一次扫描只查询一次
+    `Win32_Service`），不重复造采集轮子；
+  - 规则：`ImagePath` 含空格且未以双引号完整包裹、且 `StartName` 为 SYSTEM 类账户
+    （`LocalSystem` / `NT AUTHORITY\LocalSystem` / `NT AUTHORITY\SYSTEM`）→
+    **MEDIUM `SVC_UNQUOTED_PATH`**（T1574.009）；
+  - evidence 附带候选劫持路径（按空格拆分的 `*.exe`）与"当前用户可写的候选目录"，
+    便于判断真实可利用性；畸形/只有开引号的路径按 MEDIUM 提示需人工确认；
+  - 采集失败/结构异常/超限：`SVC_UNQUOTED_SKIPPED` / `SVC_UNQUOTED_PARSE_ERROR` /
+    `SVC_UNQUOTED_PARTIAL`（SKIPPED，未检查 ≠ 安全）；
+  - `service.py` 新增可复用的 `collect_services()` / `normalize_service_records()` /
+    `clear_service_cache()`（`scan()` 行为保持不变，有回归测试）。
+
+- **开发工具（V1.1）**：新增 `tools/verify_v11.ps1`（本地一键复现 CI：
+  `compileall` + `pytest` + `ruff` + 版本/模块数/样例报告断言，退出码 0 表示全部通过）与
+  `tools/regenerate_sample_report.py`（重新生成并脱敏演示报告：用户目录/主机名/用户名/域替换、
+  按 `MODULE_REGISTRY` 归一 19 个模块状态、重渲染 HTML）；README §8.1 增加使用说明。
+
+### Fixed
+
+- **模块 1 加固补丁（V1.1 统一合并前）**：
+  - 遍历达到深度/节点上限时不再静默漏报：`TASK_HIDDEN_PARTIAL` 显式上报截断数量；
+  - 节点上限改为在 `append` 前检查，修复单层海量子键可一次突破 `_MAX_NODES` 的问题；
+  - 新增 `Index` 值删除变体检测：任务节点（含 `Id`）缺少 `Index` → HIGH
+    `TASK_HIDDEN_TARRASK`（`evidence.reasons` 含 `index_missing`）；
+  - 模块 1 测试增至 34 条（模块 1/2/3/4 + 采集复用层共 140 条）。
+
+### Tests
+
+- 新增 `tests/` 纯函数单元测试 140 条，无需管理员权限、不依赖本机是否被入侵：
+  `tests/test_scheduled_task_hidden.py`（34）、`tests/test_wfp_filter.py`（31）、
+  `tests/test_credential_rdp.py`（35）、`tests/test_unquoted_service_path.py`（29）、
+  `tests/test_service_collect.py`（11）；
+- CI（`.github/workflows/ci.yml`）新增 `python -m pytest -q` 步骤，并在
+  `compileall` 中纳入 `tests/`，同时校验样例报告版本号/模块数。
+
+### Security
+
+- 需要管理员权限才能读的持久化位置（`TaskCache\Tree`、BFE `Policy`）在标准用户下
+  明确返回 `SKIPPED / TASK_HIDDEN_ACCESS_DENIED` / `WFP_ACCESS_DENIED`，不误判为安全；
+- 模块 3 的 `NetworkProvider` / `TermService\Parameters` 在实测 Windows 11 上标准用户可读，
+  因此普通用户也能得到真实检测结果；加固系统 ACL 收紧时按部分降级，两部分互不影响；
+- 模块 4 复用 `service` 模块采集结果（180s 短时缓存），单次扫描只查询一次
+  `Win32_Service`，避免重复调用 CIM 带来的开销与不一致。
 
 ## [1.0.0] - 2026-11-10
 

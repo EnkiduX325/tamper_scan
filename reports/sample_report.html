@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TamperScan 扫描报告 - 2026-01-01T00:00:00+00:00</title>
+<title>TamperScan 扫描报告 - 2026-11-10T14:49:40+00:00</title>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1f2328; --muted: #57606a;
@@ -67,11 +67,11 @@
   <header class="page-header">
     <h1>TamperScan 扫描报告</h1>
     <dl class="meta">
-      <div><dt>生成时间</dt><dd>2026-01-01T00:00:00+00:00</dd></div>
+      <div><dt>生成时间</dt><dd>2026-11-10T14:49:40+00:00</dd></div>
       <div><dt>主机</dt><dd>TEST-PC（Windows-11-10.0.22631-SP0，管理员）</dd></div>
-      <div><dt>工具版本</dt><dd>TamperScan 1.0.0</dd></div>
+      <div><dt>工具版本</dt><dd>TamperScan 1.1.0</dd></div>
       <div><dt>扫描耗时</dt><dd>47.71 秒</dd></div>
-      <div><dt>扫描模块</dt><dd>15/15 可用</dd></div>
+      <div><dt>扫描模块</dt><dd>19/19 可用</dd></div>
       <div><dt>退出码</dt><dd>2（HIGH=2，MEDIUM=1，其余 0）</dd></div>
     </dl>
   </header>
@@ -140,10 +140,38 @@
           <td></td>
         </tr>
         <tr>
+          <td>scheduled_task_hidden</td>
+          <td>计划任务隐藏（Tarrask/Index）</td>
+          <td>ok</td>
+          <td>0</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>wfp_filter</td>
+          <td>WFP 持久化过滤器（EDR Silencer）</td>
+          <td>ok</td>
+          <td>0</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>credential_rdp</td>
+          <td>凭证与 RDP 后门（NetworkProvider）</td>
+          <td>ok</td>
+          <td>0</td>
+          <td></td>
+        </tr>
+        <tr>
           <td>service</td>
           <td>系统服务</td>
           <td>ok</td>
           <td>2</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>unquoted_service_path</td>
+          <td>未加引号服务路径提权</td>
+          <td>ok</td>
+          <td>0</td>
           <td></td>
         </tr>
         <tr>

@@ -77,7 +77,7 @@ def _print_module_results(results: list[dict[str, Any]], verbose: bool) -> None:
     if verbose:
         for item in results:
             if item["status"] == "ok":
-                print(f"  [ OK ] {_pad(item['name'], 20)}{_pad(item['label'], 36)}产出 {item['count']} 条")
+                print(f"  [ OK ] {_pad(item['name'], 22)}{_pad(item['label'], 36)}产出 {item['count']} 条")
     problems = [item for item in results if item["status"] != "ok"]
     if not problems:
         return
@@ -87,7 +87,7 @@ def _print_module_results(results: list[dict[str, Any]], verbose: bool) -> None:
                 reason = f"尚未实现（计划阶段 {item['stage']}）"
             else:
                 reason = str(item.get("error") or "未知错误")
-            print(f"  [WARN] {_pad(item['name'], 20)}{_pad(item['label'], 36)}{reason}")
+            print(f"  [WARN] {_pad(item['name'], 22)}{_pad(item['label'], 36)}{reason}")
     else:
         names = ", ".join(item["name"] for item in problems)
         print(f"  [WARN] {len(problems)} 个模块不可用已跳过：{names}（加 --verbose 查看原因）")
@@ -123,7 +123,7 @@ def cmd_list_modules() -> int:
     print(BANNER_LINE)
     print(f" TamperScan {__version__} 模块清单")
     print(BANNER_LINE)
-    print(f"  {_pad('模块名', 20)}{_pad('说明', 40)}{_pad('计划阶段', 10)}状态")
+    print(f"  {_pad('模块名', 22)}{_pad('说明', 40)}{_pad('计划阶段', 10)}状态")
     for name, label, stage in MODULE_REGISTRY:
         module, error = load_scanner(name)
         if module is not None:
@@ -132,7 +132,7 @@ def cmd_list_modules() -> int:
             status = "未实现"
         else:
             status = f"异常（{error}）"
-        print(f"  {_pad(name, 20)}{_pad(label, 40)}{_pad('阶段 ' + str(stage), 10)}{status}")
+        print(f"  {_pad(name, 22)}{_pad(label, 40)}{_pad('阶段 ' + str(stage), 10)}{status}")
     return 0
 
 

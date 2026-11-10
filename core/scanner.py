@@ -21,7 +21,7 @@ from typing import Any, Callable
 from .finding import dedupe_findings, make_skipped, sort_findings
 from .utils import apply_whitelist, load_whitelist
 
-# (模块名, 中文说明, 计划接入阶段) —— 与重构前 main.py 完全一致，保持 15 个模块顺序
+# (模块名, 中文说明, 计划接入阶段) —— 保持 15 个既有模块顺序，V1.1 新模块追加在对应位置
 MODULE_REGISTRY: tuple[tuple[str, str, int], ...] = (
     ("autoruns", "Autoruns 广度兜底（autorunsc64.exe）", 2),
     ("registry_run", "注册表 Run/RunOnce（64/32 位）", 3),
@@ -29,7 +29,11 @@ MODULE_REGISTRY: tuple[tuple[str, str, int], ...] = (
     ("browser_settings", "IE/系统主页、搜索、代理", 3),
     ("startup_lnk", "Startup 启动目录 LNK", 3),
     ("scheduled_task", "计划任务", 4),
+    ("scheduled_task_hidden", "计划任务隐藏（Tarrask/Index）", 7),
+    ("wfp_filter", "WFP 持久化过滤器（EDR Silencer）", 7),
+    ("credential_rdp", "凭证与 RDP 后门（NetworkProvider）", 7),
     ("service", "系统服务", 4),
+    ("unquoted_service_path", "未加引号服务路径提权", 7),
     ("wmi_subscription", "WMI 永久订阅", 4),
     ("network", "Hosts / DNS", 4),
     ("bits", "BITS 作业", 4),

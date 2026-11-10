@@ -9,11 +9,13 @@
 
 ![TamperScan 图形界面：扫描结果与详情面板](docs/screenshots/gui_results.png)
 
-- 版本：`1.0.0`（唯一来源：[core/version.py](core/version.py)）
+- 版本：`1.1.0`（唯一来源：[core/version.py](core/version.py)）
+- **V1.1 新增 4 个高级威胁检测模块**（Tarrask 计划任务隐藏、WFP / EDR Silencer 持久化过滤器、
+  凭证与 RDP 后门、未加引号服务路径），模块总数 **19**；详见 [§9.1](#91-v11-新增模块与规则清单)
 - 支持：Windows 10 / 11（x64），Python 3.10+
 - 单次扫描、无云端依赖；外部工具仅 Sysinternals `autorunsc64.exe`（缺失自动降级）
 
-> 外部工具提示（重要）：本仓库不包含 Sysinternals 的 `autorunsc64.exe`（其许可不允许第三方再分发），请按 [tools/README.txt](tools/README.txt) 从微软官方下载后放入 `tools/`。若缺少该工具，Autoruns 模块会自动跳过（`SKIPPED`），扫描继续，其余 14 个模块不受影响。
+> 外部工具提示（重要）：本仓库不包含 Sysinternals 的 `autorunsc64.exe`（其许可不允许第三方再分发），请按 [tools/README.txt](tools/README.txt) 从微软官方下载后放入 `tools/`。若缺少该工具，Autoruns 模块会自动跳过（`SKIPPED`），扫描继续，其余 18 个模块不受影响。
 
 提供两种使用形态：
 
@@ -62,6 +64,8 @@ python gui.py                :: GUI
 | 进程内存 YARA（`MEMORY_`） | `SKIPPED / MEMORY_ACCESS_DENIED` | skrapa 读取进程内存前必须启用 `SeDebugPrivilege`，标准用户对任何进程（含自己）都会 `TokenPrivilegeError` |
 | BITS 全用户作业（`BITS_`） | `SKIPPED / BITS_ACCESS_DENIED`，自动降级只查当前用户 | `Get-BitsTransfer -AllUsers` 需要管理员 |
 | Defender 排除项（`POLICY_`） | `SKIPPED / POLICY_ACCESS_DENIED` | `Windows Defender\Exclusions` 键对标准用户拒绝访问 |
+| 计划任务隐藏检测（`TASK_HIDDEN_`） | `SKIPPED / TASK_HIDDEN_ACCESS_DENIED` | `Schedule\TaskCache\Tree` 键对标准用户拒绝访问（Tarrask 检测需管理员） |
+| WFP 持久化过滤器（`WFP_`） | `SKIPPED / WFP_ACCESS_DENIED` | `BFE\Parameters\Policy` 键对标准用户拒绝访问（EDR Silencer 检测需管理员） |
 
 需要完整结果时：
 
@@ -89,15 +93,17 @@ python gui.py                :: GUI
 
  2.2 权限提醒与降级说明
 
-以管理员身份运行可获得最完整的结果：Defender 排除项、BITS 全用户作业、进程内存扫描（`MEMORY_`）都需要管理员权限。
+以管理员身份运行可获得最完整的结果：Defender 排除项、BITS 全用户作业、进程内存扫描（`MEMORY_`）、计划任务隐藏检测（`TASK_HIDDEN_`）、WFP 持久化过滤器检测（`WFP_`）都需要管理员权限。
 
-标准用户（未提权）时，以下三类检查会降级为 `SKIPPED`：
+标准用户（未提权）时，以下五类检查会降级为 `SKIPPED`：
 
 | 降级项 | 典型 rule_id | 界面表现 | 说明 |
 |---|---|---|---|
 | 进程内存 YARA | `MEMORY_ACCESS_DENIED` / `MEMORY_SKIPPED` | 灰色 `SKIPPED` 行 + 灰色统计卡片计数 | skrapa 需 `SeDebugPrivilege` |
 | BITS 全用户作业 | `BITS_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | 自动降级只查当前用户 |
 | Defender 排除项 | `POLICY_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | 注册表排除项键需要管理员 |
+| 计划任务隐藏检测 | `TASK_HIDDEN_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | `Schedule\TaskCache\Tree` 键需要管理员 |
+| WFP 持久化过滤器 | `WFP_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | `BFE\Parameters\Policy` 键需要管理员 |
 
 > 这不是报错，也不是“安全”：`SKIPPED` 是权限不足时的安全降级——扫描器明确告诉你“这一项没有检查”，而不是把未检查项当作干净。灰色统计卡片/灰色结果行就是为此设计的提示，导出报告时会原样保留（HTML 报告同样按灰色展示）。
 
@@ -149,7 +155,7 @@ build.bat
 | `--quiet` | 只输出统计摘要、退出码与报告路径，不逐条打印 Finding（适合计划任务/CI） |
 | `--module NAME` | 只运行指定模块（可重复，调试/验收用） |
 | `--verbose, -v` | 输出模块级明细（含跳过原因） |
-| `--list-modules` | 列出 15 个扫描模块及接入状态 |
+| `--list-modules` | 列出 19 个扫描模块及接入状态 |
 | `--version` | 打印版本 |
 
 示例：
@@ -179,12 +185,12 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 ```json
 {
   "tool": "TamperScan",
-  "version": "1.0.0",
-  "generated_at": "2026-01-01T00:00:00+00:00",
+  "version": "1.1.0",
+  "generated_at": "2026-11-10T00:00:00+00:00",
   "host": {"name": "TEST-PC", "os": "Windows-11-...", "is_admin": true, "user": "User"},
   "scan": {
     "duration_seconds": 47.71,
-    "modules_total": 15, "modules_available": 15,
+    "modules_total": 19, "modules_available": 19,
     "modules": [{"name": "autoruns", "label": "...", "status": "ok", "count": 21, "error": null}]
   },
   "summary": {"total": 32, "counts": {"HIGH": 12, "MEDIUM": 0, "LOW": 2, "INFO": 17, "SKIPPED": 1}, "exit_code": 2},
@@ -250,6 +256,10 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 6. `autorunsc64.exe` 采集省略 `-h`：哈希列不参与判定，且 `-h` 会把单次采集从约 16s 拉长到约 72s；需要哈希时自行用其他工具对 Finding 目标计算。
 7. CRX2 不支持：仅解析 CRX3 头；CRX2 文件会被跳过（不产生误报）。
 8. DNS 判定只覆盖 IPv4：IPv6 DNS（运营商地址无法枚举）统一跳过，避免大量误报；Hosts/DNS 指向私网不报。
+9. 计划任务隐藏检测（`TASK_HIDDEN_TARRASK`）依赖 `HKLM\...\Schedule\TaskCache\Tree`，标准用户读不到该键（返回 `SKIPPED / TASK_HIDDEN_ACCESS_DENIED`）；且判定是状态型的：只能发现"当前处于隐藏状态"的任务，已删除的任务需要实时注册表事件（Sysmon 13/14）配合才能回溯。`Index==0` 在默认系统上可能存在历史残留键（无对应 `Tasks\<Id>` 定义，例如卸载残留/Edge 升级程序动态值），这类节点默认降为 MEDIUM（模块常量 `STALE_INDEX_ZERO_SEVERITY`，改成 `"HIGH"` 即恢复严格规则）；`Index` 值被删除的变体（会让 schtasks/任务计划程序整体枚举失败）已覆盖：任务节点（含 `Id`）缺少 `Index` 时 HIGH；遍历截断/部分读取失败会以 `TASK_HIDDEN_PARTIAL` 显式上报。只删改一部分 `SD` 的变体（`schtasks` 隐藏但 PowerShell 仍可枚举）暂不覆盖，需人工复核。
+10. WFP 持久化过滤器检测（`WFP_`）解析的是 BFE 的 NDR 二进制存储（Quarkslab 逆向格式 + `FWPM_FILTER0` 字段顺序），NDR 指针布局跨 Windows 版本可能变化：无法定位结构的过滤器只会记 `SKIPPED / WFP_FILTER_UNPARSED`（不误报，但也不检查）；IPv6 远端地址以 `FWP_BYTE_ARRAY16` 指针形式存储，本版不解析；远端 IPv4 按 WFP 约定的网络字节序解释；系统过滤器按 `MPSSVC_*` 子层或 `@...` 资源显示名排除，攻击者可伪造显示名冒充系统规则，需结合进程/签名审计确认。
+11. 凭证与 RDP 后门检测（`NP_` / `RDP_`）读取的 `Control\NetworkProvider` 与 `Services\TermService\Parameters` 在实测 Windows 11 上**标准用户可读**，因此标准用户也能得到真实结果；但加固系统/组策略可能收紧 ACL，此时按部分降级（`NP_ACCESS_DENIED` / `RDP_ACCESS_DENIED`，两部分互不影响）。Network Provider 基线为 `RDPNP→drprov.dll`、`P9NP→p9np.dll`、`LanmanWorkstation→ntlanman.dll`、`webclient→davclnt.dll`（Win11 起含 P9NP）；第三方 VPN/安全产品可能注册自己的 Provider，非微软签名的"未知提供者"按 HIGH 上报并附签名/路径证据，需人工确认是否为已知产品；RDP 侧只检测 `ServiceDll`，不覆盖 `termsrv.dll` 内存补丁/配置类后门。
+12. 未加引号的服务路径检测（`SVC_UNQUOTED_PATH`）复用 `service` 模块的 CIM 采集结果（短时缓存 180s，避免同一次扫描重复查询）；只按"含空格 + 未加引号 + SYSTEM 运行"给 MEDIUM，evidence 中附带候选劫持路径与当前用户可写的候选目录供人工判断真实可利用性；非 SYSTEM 服务（NetworkService/LocalService/域用户）不参与提权判定；`PathName` 由 CIM 返回、可能被系统截断（极长路径），本模块对完整字符串判定、展示统一截断。
 
 ---
 
@@ -290,7 +300,7 @@ build.bat
 |---|---|
 | `--onefile` | 单文件分发；运行时解包到 `_MEIPASS`，代码用 `core/utils.get_base_dir()` 兼容 |
 | `--add-data "rules;rules"` / `"tools;tools"` | Windows 分隔符是 `;`；规则与外部工具一起打包（CLI/GUI 必须完全一致）。`tools/` 可能仅有 README（本仓库不提交 autorunsc64.exe），打包仍成功，运行时 Autoruns 模块 SKIPPED |
-| `--collect-submodules modules` | 15 个扫描模块是 `importlib` 动态导入，PyInstaller 静态分析发现不了 |
+| `--collect-submodules modules` | 19 个扫描模块是 `importlib` 动态导入，PyInstaller 静态分析发现不了 |
 | `--collect-binaries yara` | 打包 `libyara.dll` |
 | `--hidden-import skrapa.windows` | skrapa 的 Windows 子模块动态加载 |
 | `--hidden-import win32com.client / pythoncom / pywintypes` | pywin32 的动态 COM 加载 |
@@ -300,7 +310,27 @@ build.bat
 
 > `tools/autorunsc64.exe` 不随仓库分发（[Sysinternals 许可说明](https://learn.microsoft.com/en-us/sysinternals/license-faq)）；本地构建前请按 [tools/README.txt](tools/README.txt) 从微软官方下载，或直接使用无 Autoruns 的降级模式。
 
-测试局限：打包后的 exe 在开发机（有 Python）上验证只能证明"exe 能运行且不依赖系统 Python 路径"（验证方法：清空 PATH 中的 Python 目录后运行 `--scan`，15 个模块仍可用）。完全无 Python 环境的验证建议在干净虚拟机或 Windows Sandbox 中复测。已在 Windows 11 + Python 3.10 上完成打包与运行验证（CLI 与 GUI 双 exe）。
+测试局限：打包后的 exe 在开发机（有 Python）上验证只能证明"exe 能运行且不依赖系统 Python 路径"（验证方法：清空 PATH 中的 Python 目录后运行 `--scan`，19 个模块仍可用）。完全无 Python 环境的验证建议在干净虚拟机或 Windows Sandbox 中复测。已在 Windows 11 + Python 3.10 上完成打包与运行验证（CLI 与 GUI 双 exe）。
+
+ 8.1 本地一键校验与样例报告重生成
+
+V1.1 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.bat` 会随 `--add-data tools;tools` 一起打包，体积很小）：
+
+| 脚本 | 用途 | 用法 |
+|---|---|---|
+| `tools/verify_v11.ps1` | 本地一键复现 GitHub Actions：`compileall`（含 `tests/`）→ `pytest` → `ruff` → 版本号 / 模块数 / 样例报告断言；退出码 0 表示全部通过 | `powershell -ExecutionPolicy Bypass -File tools\verify_v11.ps1`（可加 `-SkipInstall` 跳过自动安装 pytest/ruff，`-RunFullScan` 额外跑一次真实扫描） |
+| `tools/regenerate_sample_report.py` | 重新生成并脱敏 `reports/sample_report.json/.html`：用户目录 → `C:\Users\User`、主机名 → `TEST-PC`、用户名/域 → `User`/`DOMAIN`，按 `MODULE_REGISTRY` 归一 19 个模块状态，并用 `reporter.render_html()` 重渲染 HTML | 先 `python main.py --scan --format both --output reports\sample_report`，再 `python tools\regenerate_sample_report.py` |
+
+> 提交前建议固定执行一次 `powershell -ExecutionPolicy Bypass -File tools\verify_v11.ps1`，与 CI（Python 3.10 / 3.11 矩阵）完全一致。
+> 样例报告包含主机名/用户名/路径，**重新生成后必须运行脱敏脚本并检查 `git diff reports/`**，禁止提交真实个人数据。
+
+最小提交前工作流：
+
+```bat
+python -m pip install -r requirements.txt
+python -m pip install ruff pytest
+powershell -ExecutionPolicy Bypass -File tools\verify_v11.ps1
+```
 
 ---
 
@@ -323,17 +353,61 @@ tamper_scan/
 │   ├── yara_engine.py        YARA 文件扫描 + skrapa 内存扫描封装（含权限降级）
 │   ├── utils.py              路径/ACL/命令行/白名单/系统组件启发式/外部命令（隐藏子进程窗口）
 │   └── version.py            版本号唯一来源
-├── modules/                  15 个扫描模块，均暴露 scan() -> list[Finding]
+├── modules/                  19 个扫描模块，均暴露 scan() -> list[Finding]
 │   ├── autoruns.py / registry_run.py / registry_policy.py / browser_settings.py / startup_lnk.py
-│   ├── scheduled_task.py / service.py / wmi_subscription.py / network.py / bits.py
+│   ├── scheduled_task.py / scheduled_task_hidden.py / wfp_filter.py / credential_rdp.py
+│   ├── service.py / unquoted_service_path.py / wmi_subscription.py / network.py / bits.py
 │   ├── powershell_profile.py / com_hijack.py / lsa_appinit.py
 │   ├── browser_ext.py / lolbin_process.py
+├── tests/                    纯函数单元测试（不依赖管理员权限；`python -m pytest -q`）
 ├── rules/                    规则与白名单（随 exe 打包）
 ├── tools/                    外部工具目录（不含 autorunsc64.exe；下载说明见 tools/README.txt）
+│   ├── verify_v11.ps1        本地复现 CI（compileall + pytest + ruff + 版本/模块数/样例报告断言）
+│   └── regenerate_sample_report.py  重新生成并脱敏演示报告（版本/19 模块归一 + HTML 重渲染）
 ├── docs/screenshots/         界面截图（本 README 引用）
 └── reports/
     └── sample_report.json / sample_report.html    脱敏后的管理员演示报告
 ```
+
+ 9.1 V1.1 新增模块与规则清单
+
+V1.1 在 1.0.0 的 15 个模块基础上新增 **4 个高级威胁检测模块**，模块总数 **19**。
+新增模块与既有模块遵循同一契约（`scan() -> list[Finding]`、`make_finding`、异常降级为
+`SKIPPED`、白名单/去重/排序统一由调度核心处理）；单元测试 **140 条**（`python -m pytest -q`，
+CI 中执行）：
+
+| 模块 | 关键规则 | 默认等级 | 检测点与要点 |
+|---|---|---|---|
+| Tarrask 计划任务隐藏<br>`scheduled_task_hidden` | `TASK_HIDDEN_TARRASK` / `TASK_HIDDEN_PARTIAL` / `TASK_HIDDEN_ACCESS_DENIED` | HIGH / SKIPPED | `TaskCache\Tree` 子键 `SD` 缺失/为空/非二进制、`Index == 0`、任务节点 `Index` 被删除；`Index==0` 的历史残留键默认降 MEDIUM（常量 `STALE_INDEX_ZERO_SEVERITY` 可切 HIGH） |
+| WFP 持久化过滤器<br>`wfp_filter` | `WFP_EDR_SILENCER` / `WFP_BLOCK_PUBLIC_IP` / `WFP_BLOCK_REMOTE_PORT` / `WFP_BLOCK_FILTER` / `WFP_FILTER_UNPARSED` | HIGH / MEDIUM / SKIPPED | 解析 BFE `Persistent\Filter` 的 NDR 二进制（GUID 命名值 + `FWPM_FILTER0` 字段偏移 + condition 记录），识别 EDR Silencer 式出站阻断与公网 IP/端口阻断；系统过滤器（`MPSSVC_*` 子层 / `@` 显示名）跳过 |
+| 凭证与 RDP 后门<br>`credential_rdp` | `NP_PROVIDER_TAMPER` / `NP_UNKNOWN_PROVIDER` / `NP_ORDER_MISMATCH` / `RDP_SERVICEDLL_TAMPER` / `RDP_SERVICEDLL_ABSENT` / `NP_ACCESS_DENIED` / `RDP_ACCESS_DENIED` | HIGH / LOW / MEDIUM / SKIPPED | NetworkProvider `ProviderOrder` 陌生/被替换的提供者（对照微软基线 + `ProviderPath` 路径/签名校验，交叉校验 `Order` 与 `HwOrder`）；TermService `ServiceDll` 系统目录外/改名/非微软签名；两部分独立降级 |
+| 未加引号服务路径<br>`unquoted_service_path` | `SVC_UNQUOTED_PATH` / `SVC_UNQUOTED_SKIPPED` / `SVC_UNQUOTED_PARTIAL` | MEDIUM / SKIPPED | 复用 `service` 模块 CIM 采集（180s 短时缓存，不重复查询）；`ImagePath` 含空格且未加引号 + SYSTEM 类账户运行；evidence 附候选劫持路径与当前用户可写目录（T1574.009） |
+
+> 阶段 7 = V1.1 新增；阶段 2–6 = 1.0.0 既有模块。逐模块规则/局限见 [§6](6-已知局限) 与各模块 docstring。
+
+19 个扫描模块完整清单（按 `core/scanner.py::MODULE_REGISTRY` 顺序）：
+
+| # | 模块名 | 阶段 | 说明 |
+|---|---|---|---|
+| 1 | `autoruns` | 2 | Autoruns 广度兜底（autorunsc64.exe） |
+| 2 | `registry_run` | 3 | 注册表 Run/RunOnce（64/32 位） |
+| 3 | `registry_policy` | 3 | 浏览器策略键 / Defender 排除项 |
+| 4 | `browser_settings` | 3 | IE/系统主页、搜索、代理 |
+| 5 | `startup_lnk` | 3 | Startup 启动目录 LNK |
+| 6 | `scheduled_task` | 4 | 计划任务 |
+| 7 | `scheduled_task_hidden` | 7 | 计划任务隐藏（Tarrask/Index） |
+| 8 | `wfp_filter` | 7 | WFP 持久化过滤器（EDR Silencer） |
+| 9 | `credential_rdp` | 7 | 凭证与 RDP 后门（NetworkProvider） |
+| 10 | `service` | 4 | 系统服务 |
+| 11 | `unquoted_service_path` | 7 | 未加引号服务路径提权 |
+| 12 | `wmi_subscription` | 4 | WMI 永久订阅 |
+| 13 | `network` | 4 | Hosts / DNS |
+| 14 | `bits` | 4 | BITS 作业 |
+| 15 | `powershell_profile` | 4 | PowerShell Profile |
+| 16 | `com_hijack` | 4 | COM 劫持（InprocServer32） |
+| 17 | `lsa_appinit` | 4 | LSA / AppInit / IFEO |
+| 18 | `browser_ext` | 5 | 浏览器扩展深度检测 |
+| 19 | `lolbin_process` | 6 | LOLBin 进程与内存扫描 |
 
 ---
 
