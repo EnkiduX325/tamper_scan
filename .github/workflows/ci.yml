@@ -35,16 +35,21 @@ jobs:
 
       # 只安装运行依赖；不安装 requirements-build.txt（PyInstaller 仅在本地打包时需要）。
       # 仓库中不包含 tools/autorunsc64.exe 与 dist/，静态检查也不需要它们。
-      - name: Install runtime dependencies and Ruff
+      - name: Install runtime dependencies and lint/test tools
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install ruff
+          python -m pip install ruff pytest
 
       # 只做语法编译，不 import、不运行 main.py / gui.py、不执行真实扫描。
       - name: Syntax check (compile only)
         run: |
-          python -m compileall -q core modules main.py gui.py reporter.py
+          python -m compileall -q core modules main.py gui.py reporter.py tests
+
+      # 单元测试：纯函数 + HKCU 合成注册表 + 降级路径；不依赖管理员权限与外部工具。
+      - name: Unit tests
+        run: |
+          python -m pytest -q
 
       - name: Static analysis (Ruff)
         run: |
@@ -52,4 +57,4 @@ jobs:
 
       - name: Validate sample report JSON
         run: |
-          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.0.0'; print('sample report OK:', len(d['findings']), 'findings')"
+          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.1.0' and d['scan']['modules_total'] == 19; print('sample report OK:', len(d['findings']), 'findings,', d['scan']['modules_total'], 'modules')"
