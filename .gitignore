@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PyInstaller 构建产物
+build/
+dist/
+*.spec
+
+# 本地扫描报告（保留脱敏后的演示样例）
+reports/*
+!reports/sample_report.json
+!reports/sample_report.html
+tamper_scan_report.json
+tamper_scan_report.html
+
+# 本地/CI 临时文件
+.env
+.env.*
+*.log
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+
+# 外部工具：Sysinternals 许可不允许再分发，本地自行下载（见 tools/README.txt）
+tools/autorunsc64.exe
