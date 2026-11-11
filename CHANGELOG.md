@@ -12,6 +12,73 @@
 - 模块 2 后续增强：IPv6 远端地址（`FWP_BYTE_ARRAY16` 指针）解析与 NDR 布局跨版本兼容；
 - 模块 3 后续增强：RDP 配置类后门（`fDenyTSConnections` / 端口 / 影子会话等）。
 
+## [1.4.0] - 2026-11-11
+
+V1.4「信任边界、基线归一化与攻击链关联」：模块总数仍 **20**；新增 autorunsc64 微软签名信任边界、
+基线 target 严格归一化与良性版本前进豁免、固定剧本攻击链关联（含反模式抑制）、CLI 容错与
+`--fail-on-skipped`，并将 `core/utils.py` 拆分为 4 个模块（保留 shim）；协议从 CC BY-NC 4.0
+切换为 **AGPL-3.0 + 商业授权双轨制**（新增 LICENSE-COMMERCIAL.md / CLA.md）。
+
+### Added
+
+- **autorunsc64 信任边界**（`modules/autoruns.py`）：执行前强制校验微软签名（可选
+  `rules/autoruns_trust.json` SHA256 白名单），不可信时返回 `SKIPPED / AUTORUNS_UNTRUSTED_BINARY`
+  且**不执行 subprocess**；evidence 含 `binary_path` / `reason` / `signature` / `sha256`。
+- **基线引擎增强**（`core/baseline.py`）：`normalize_target()` 严格归一化（环境变量展开、
+  `\\?\` 长路径前缀、Sysnative 映射、8.3 短名解析、大小写/尾随空格、registry 专用归一化），
+  索引与 annotate 写入 `normalized_key`；`DIFF_STATUSES` 增加 `BENIGN_UPDATE`（七状态）；
+  `diff_reports(..., treat_version_bump_as_benign=False)` 支持“签名者一致 + 版本单调前进”的
+  良性更新豁免（默认降级 MEDIUM，开启后 `BENIGN_UPDATE` 静默）。
+- **攻击链关联**（`rules/attack_chain.json` + `core/correlator.py`）：`tactic_mapping` /
+  `chain_templates`（固定剧本，至少 3 条）/ `anti_patterns`（反模式抑制）；
+  `load_chain_rules` / `correlate` 纯只读 API；campaign 含 chain_id/name/confidence/tactics/
+  steps/finding_count/targets/suppressed_by/shadow 等字段。
+- **CLI**（`main.py`）：`--fail-on-skipped`（存在 SKIPPED 时退出码 `3`，优先级最高）、
+  `--campaign` / `--campaign-shadow`（互斥）/ `--fail-on-campaign {high}` /
+  `--treat-version-bump-as-benign`；`--save-baseline` 与 `--baseline` 改为互斥参数组。
+- **报告 / GUI**：reporter 渲染攻击链纯 CSS 时间线、影子模式灰色虚线样式与 `BENIGN_UPDATE`
+  中性徽章；GUI 新增「攻击链」按钮与攻击链视图（campaign 列表 + 步骤时间线 + 结果列表联动）。
+- **core 拆分**：`core/utils.py` 拆分为 `core/paths.py` / `core/acl.py` /
+  `core/subprocess_util.py` / `core/whitelist.py`，`core.utils` 保留完全兼容 shim
+  （函数 / 常量 / 行为一致）。
+- **协议文档**：新增 `LICENSE-COMMERCIAL.md`（商业授权范围 / 费用与联系方式占位 / 免责声明 /
+  历史授权说明）与 `CLA.md`（贡献者许可协议模板，标注 `CLA-TEMPLATE`）；
+  `tools/verify_v14.ps1` 与 CI 增加 AGPL / 双轨 / correlator / CLI 自检。
+
+### Changed
+
+- 版本号升级为 `1.4.0`（`core/version.py` 唯一来源）；LICENSE 替换为 **AGPL-3.0** 官方全文
+  （含双轨制头部声明）；README 徽章与许可章节改为 AGPL-3.0 + 商业双轨，新增 V1.4 章节与
+  §3.1 / §3.2 / §3.3（基线七状态、攻击链、容错与退出码优先级）。
+- 基线对比状态由六种扩展为七种（新增 `BENIGN_UPDATE`）；`--fail-on-new` 语义不变。
+- `--quiet` 模式下存在 SKIPPED 时输出 WARN；`--save-baseline` 未配合 `--hash-targets`、
+  基线不含哈希、版本/主机不一致时输出 WARN（只告警、不阻断扫描）。
+- `build.bat`：检测 skrapa 是否安装，未安装时移除 skrapa hidden-import 并输出 WARNING，
+  避免打包失败；CLI / GUI 继续共用同一套 COMMON 打包参数。
+- 向后兼容：不传 V1.4 新参数时，扫描行为 / JSON 键集合 / HTML 结构 / 退出码与 V1.3 完全一致
+  （无 `campaigns` / `campaign_stats` / `campaign_shadow` / `normalized_key` 等新增键）。
+- 单元测试扩展至 **700 条**（V1.4 起，含 autorunsc 信任 / CLI 容错 / correlator /
+  基线 normalize+benign / core 拆分等测试；最终准确数字以发布说明为准）。
+
+### Security
+
+- **协议变更**：自 V1.4 起采用 **AGPL-3.0**（网络服务强 copyleft）+ **商业授权**双轨制；
+  闭源商业集成/分发必须购买商业授权（见 `LICENSE-COMMERCIAL.md`），贡献须签署 `CLA.md`；
+  历史版本（V1.2–V1.3 为 CC BY-NC 4.0、V1.0–V1.1 为 MIT）按其发布时协议授权。
+- autorunsc64 执行前强制微软签名校验（可选 SHA256 白名单），不可信二进制绝不执行，
+  降低“外部工具被替换”的供应链风险；`AUTORUNS_UNTRUSTED_BINARY` 显式标记未检查。
+- 基线归一化避免 `Sysnative` / 8.3 短名 / 环境变量差异造成漏匹配；良性版本豁免可能被伪造
+  版本号滥用，文档明确“不得作为免检依据”。
+- 攻击链关联为纯只读后处理，不改变 Finding / 严重等级 / 默认退出码；反模式抑制可能掩盖
+  真实攻击，需定期复核规则库。
+
+### Removed
+
+- 移除 CC BY-NC 4.0 作为当前许可证（仅保留历史说明）；README 顶部 CC BY-NC 提示行替换为
+  AGPL-3.0 徽章 + 双轨制说明。
+- 移除 `tools/verify_v13.ps1`（由 `tools/verify_v14.ps1` 取代）。
+- `--save-baseline` 与 `--baseline` 不再“保存优先静默处理”，改为 argparse 互斥报错。
+
 ## [1.3.0] - 2026-11-11
 
 V1.3「基线对比（Baseline Diff）」：新增基线对比引擎，把静态扫描升级为动态判篡改——

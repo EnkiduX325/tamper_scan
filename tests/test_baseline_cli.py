@@ -144,21 +144,18 @@ class BaselineCliTestCase(unittest.TestCase):
 
 class TestParser(BaselineCliTestCase):
     def test_new_options_registered(self) -> None:
-        args = main.build_parser().parse_args(
-            [
-                "--scan",
-                "--save-baseline",
-                "base.json",
-                "--baseline",
-                "old.json",
-                "--fail-on-new",
-                "--hash-targets",
-            ]
+        # V1.4：--save-baseline 与 --baseline 成为互斥参数，需分别解析
+        save_args = main.build_parser().parse_args(
+            ["--scan", "--save-baseline", "base.json", "--fail-on-new", "--hash-targets"]
         )
-        self.assertEqual(args.save_baseline, "base.json")
-        self.assertEqual(args.baseline, "old.json")
-        self.assertTrue(args.fail_on_new)
-        self.assertTrue(args.hash_targets)
+        self.assertEqual(save_args.save_baseline, "base.json")
+        self.assertIsNone(save_args.baseline)
+        self.assertTrue(save_args.fail_on_new)
+        self.assertTrue(save_args.hash_targets)
+
+        compare_args = main.build_parser().parse_args(["--scan", "--baseline", "old.json"])
+        self.assertEqual(compare_args.baseline, "old.json")
+        self.assertIsNone(compare_args.save_baseline)
 
     def test_defaults_keep_v12_semantics(self) -> None:
         args = main.build_parser().parse_args(["--scan"])
@@ -192,7 +189,7 @@ class TestSaveBaseline(BaselineCliTestCase):
         self.assertIn("基线已保存", stdout)
         self.assertTrue(path.is_file())
         data = self._read_json(path)
-        self.assertEqual(data["version"], "1.3.0")
+        self.assertEqual(data["version"], "1.4.0")
         self.assertEqual(data["version"], __version__)
         self.assertEqual(len(data["findings"]), 1)
         self.assertEqual(data["findings"][0]["rule_id"], "SIG_UNSIGNED")
@@ -222,19 +219,18 @@ class TestSaveBaseline(BaselineCliTestCase):
         self.assertIn(str(path), stdout)
         self.assertTrue(path.is_file())
 
-    def test_save_baseline_takes_priority_over_baseline(self) -> None:
+    def test_save_baseline_and_baseline_are_mutually_exclusive(self) -> None:
+        # V1.4：--save-baseline 与 --baseline 改为 argparse 互斥组，同时传入直接报错退出
         saved = self.tmp / "preferred.json"
         old = self._write_json("old.json", _baseline_report([]))
-        result = _scan_result([_finding("MEDIUM", "R", r"C:\Temp\new.exe")])
-
-        code, stdout, stderr = self._run(
-            ["--save-baseline", str(saved), "--baseline", str(old)], result
-        )
-
-        self.assertEqual(code, 1)  # 正常退出码语义，不做对比
-        self.assertTrue(saved.is_file())
-        self.assertNotIn("[WARN]", stderr)
-        self.assertNotIn("基线对比", stdout)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(main, "run_scan") as run_mock:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as caught:
+                    main.main(["--scan", "--save-baseline", str(saved), "--baseline", str(old)])
+        self.assertEqual(caught.exception.code, 2)
+        run_mock.assert_not_called()
+        self.assertFalse(saved.exists())
 
     def test_hash_targets_are_written_into_saved_baseline(self) -> None:
         target = self.tmp / "evil.exe"
@@ -522,7 +518,7 @@ class TestBackwardCompat(BaselineCliTestCase):
         )
         self.assertNotIn("baseline", data)
         self.assertNotIn("diff_counts", data["summary"])
-        self.assertEqual(data["version"], "1.3.0")
+        self.assertEqual(data["version"], "1.4.0")
         for item in data["findings"]:
             self.assertNotIn("diff_status", item)
             self.assertNotIn("sha256", item.get("evidence") or {})

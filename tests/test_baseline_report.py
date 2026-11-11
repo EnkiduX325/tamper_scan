@@ -144,18 +144,12 @@ class ApplyBaselineDiffTests(unittest.TestCase):
     # -- summary ----------------------------------------------------------
     def test_summary_diff_counts(self) -> None:
         counts = self.enriched["summary"]["diff_counts"]
-        self.assertEqual(set(counts), set(baseline.DIFF_STATUSES))
-        self.assertEqual(
-            counts,
-            {
-                "NEW": 1,
-                "MODIFIED": 1,
-                "ESCALATED": 1,
-                "DOWNGRADED": 1,
-                "RESOLVED": 1,
-                "UNCHANGED": 1,
-            },
-        )
+        # 兼容 V1.3 六状态与 V1.4 七状态（core.baseline 增加 BENIGN_UPDATE）：
+        # 六种既有状态必须齐全且各为 1；BENIGN_UPDATE 允许缺省或为 0。
+        self.assertTrue(set(baseline.DIFF_STATUSES).issubset(set(counts)))
+        for status in ("NEW", "MODIFIED", "ESCALATED", "DOWNGRADED", "RESOLVED", "UNCHANGED"):
+            self.assertEqual(counts[status], 1)
+        self.assertEqual(counts.get("BENIGN_UPDATE", 0), 0)
 
     def test_summary_counts_and_exit_code_exclude_resolved(self) -> None:
         current = [

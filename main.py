@@ -175,7 +175,7 @@ def _load_baseline_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def _print_diff_summary(diff: baseline.BaselineDiff) -> None:
-    """打印基线对比的六种状态计数（非 quiet 模式）。"""
+    """打印基线对比的多种状态计数（非 quiet 模式）。"""
     counts = baseline.diff_counts(diff)
     print("-" * 78)
     print(f"基线对比：共 {diff.total} 项")
@@ -187,6 +187,61 @@ def _print_diff_summary(diff: baseline.BaselineDiff) -> None:
     ]
     if changed:
         print("  变化：" + "，".join(changed))
+    print("-" * 78)
+
+
+def _load_correlator() -> Any:
+    """延迟导入 ``core.correlator``（攻击链关联引擎，V1.4）。
+
+    延迟到运行时导入：V1.4 并行开发期间 correlator 可能尚未落地，保证 CLI
+    其它功能仍可导入/测试；同时为测试提供单点注入位置。
+    """
+    from core import correlator
+
+    return correlator
+
+
+def _count_skipped(findings: list[dict[str, Any]]) -> int:
+    """统计 SKIPPED Finding 数量（排除基线对比追加的 RESOLVED 项）。"""
+    count = 0
+    for item in findings or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("severity") or "").upper() != "SKIPPED":
+            continue
+        if str(item.get("diff_status") or "") == baseline.DIFF_RESOLVED:
+            continue
+        count += 1
+    return count
+
+
+def _has_high_campaign(campaigns: list[dict[str, Any]]) -> bool:
+    """是否存在 confidence == "high" 的攻击链。"""
+    return any(
+        isinstance(item, dict) and str(item.get("confidence") or "").lower() == "high"
+        for item in campaigns or []
+    )
+
+
+def _print_campaign_summary(campaigns: list[dict[str, Any]], shadow: bool) -> None:
+    """非 quiet 模式下打印攻击链摘要（名称/置信度/步骤数，shadow 标注）。"""
+    title = "攻击链（影子模式：仅记录，不告警）" if shadow else "攻击链"
+    print("-" * 78)
+    print(f"{title}：{len(campaigns)} 条")
+    if not campaigns:
+        print("  未发现满足固定剧本的攻击链")
+    for campaign in campaigns:
+        if not isinstance(campaign, dict):
+            continue
+        name = str(campaign.get("name") or campaign.get("chain_id") or "(未命名)")
+        chain_id = str(campaign.get("chain_id") or "")
+        confidence = str(campaign.get("confidence") or "low").lower()
+        steps = campaign.get("steps") if isinstance(campaign.get("steps"), list) else []
+        suffix = "  [影子模式]" if shadow else ""
+        print(
+            f"  [{confidence}] {name}（{chain_id}） 步骤 {len(steps)}，"
+            f"Finding {campaign.get('finding_count')}{suffix}"
+        )
     print("-" * 78)
 
 
@@ -213,13 +268,27 @@ def cmd_scan(args: argparse.Namespace) -> int:
         modules=result.module_status,
     )
 
+    # SKIPPED 统计：--quiet 警告与 --fail-on-skipped 共用（排除基线 RESOLVED 项）
+    skipped_count = _count_skipped(report["findings"])
+    if args.quiet and skipped_count:
+        print(
+            f"[WARN] 本次扫描存在 {skipped_count} 个 SKIPPED 项（未检查 ≠ 安全）",
+            file=sys.stderr,
+        )
+
     # --hash-targets：在保存/对比之前为 HIGH/MEDIUM 的本地文件 target 计算 SHA256
-    if getattr(args, "hash_targets", False):
+    hash_targets = bool(getattr(args, "hash_targets", False))
+    if hash_targets:
         report["findings"] = baseline.enrich_findings_with_hashes(report["findings"])
 
-    # --save-baseline：保存后直接退出；与 --baseline 同时给出时保存优先
+    # --save-baseline：保存后直接退出（与 --baseline 由 argparse 互斥保证）
     save_baseline = getattr(args, "save_baseline", None)
     if save_baseline:
+        if not hash_targets:
+            print(
+                "[WARN] 基线将不含文件 SHA256，后续哈希篡改检测可能失效；建议同时使用 --hash-targets",
+                file=sys.stderr,
+            )
         try:
             saved_path = write_json(report, save_baseline)
         except Exception as exc:  # noqa: BLE001 - 基线写失败不影响扫描退出码语义
@@ -238,14 +307,49 @@ def cmd_scan(args: argparse.Namespace) -> int:
         else:
             for warning in baseline.baseline_warnings(baseline_report, report, __version__):
                 print(f"[WARN] {warning}", file=sys.stderr)
-            diff = baseline.diff_reports(baseline_report, report, baseline_path=baseline_path)
+            diff_kwargs: dict[str, Any] = {}
+            if getattr(args, "treat_version_bump_as_benign", False):
+                diff_kwargs["treat_version_bump_as_benign"] = True
+            diff = baseline.diff_reports(
+                baseline_report,
+                report,
+                baseline_path=baseline_path,
+                **diff_kwargs,
+            )
             report = reporter.apply_baseline_diff(report, diff, baseline_path=baseline_path)
             if not args.quiet:
                 _print_diff_summary(diff)
 
+    # --campaign / --campaign-shadow：攻击链后处理（在写报告之前）
+    campaigns: list[dict[str, Any]] = []
+    campaign_shadow = bool(getattr(args, "campaign_shadow", False))
+    if getattr(args, "campaign", False) or campaign_shadow:
+        correlation = _load_correlator().correlate(report["findings"])
+        correlation = correlation if isinstance(correlation, dict) else {}
+        raw_campaigns = correlation.get("campaigns")
+        campaigns = (
+            [item for item in raw_campaigns if isinstance(item, dict)]
+            if isinstance(raw_campaigns, list)
+            else []
+        )
+        stats = correlation.get("stats")
+        report["campaigns"] = campaigns
+        report["campaign_stats"] = stats if isinstance(stats, dict) else {}
+        if campaign_shadow:
+            for campaign in campaigns:
+                campaign["shadow"] = True
+            report["campaign_shadow"] = True
+        if not args.quiet:
+            _print_campaign_summary(campaigns, campaign_shadow)
+
+    # 退出码优先级：fail-on-skipped(3) > fail-on-new / fail-on-campaign high / base HIGH(2) > base
     exit_code = int(report["summary"]["exit_code"])
-    if getattr(args, "fail_on_new", False) and diff is not None and baseline.has_new_high_medium(diff):
+    if diff is not None and getattr(args, "fail_on_new", False) and baseline.has_new_high_medium(diff):
         exit_code = 2
+    if getattr(args, "fail_on_campaign", None) == "high" and _has_high_campaign(campaigns):
+        exit_code = 2
+    if getattr(args, "fail_on_skipped", False) and skipped_count:
+        exit_code = 3
 
     written, report_error = _write_reports(report, args)
 
@@ -274,14 +378,16 @@ def cmd_scan(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tamper_scan",
-        description="TamperScan —— 开箱即用的 Windows 防篡改扫描器（支持基线对比）",
+        description="TamperScan —— 开箱即用的 Windows 防篡改扫描器（基线对比 + 攻击链关联）",
         epilog=(
             "示例：tamper_scan.exe --scan\n"
             "      tamper_scan.exe --scan --format both --output reports/scan1\n"
-            "      tamper_scan.exe --scan --quiet --no-memory\n"
-            "      tamper_scan.exe --scan --save-baseline baseline.json\n"
+            "      tamper_scan.exe --scan --save-baseline baseline.json --hash-targets\n"
             "      tamper_scan.exe --scan --baseline baseline.json --fail-on-new\n"
-            "      tamper_scan.exe --scan --baseline baseline.json --hash-targets --format both --output reports/scan2"
+            "      tamper_scan.exe --scan --campaign --fail-on-campaign high\n"
+            "      tamper_scan.exe --scan --campaign-shadow --format both --output reports/scan2\n"
+            "退出码：3（--fail-on-skipped 命中）> 2（--fail-on-new / --fail-on-campaign high / HIGH）"
+            " > 1（仅 MEDIUM）> 0"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -305,16 +411,16 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FORMAT",
         help="报告格式 json|html|both（未给 --output 时写到当前目录 tamper_scan_report）",
     )
-    parser.add_argument(
+    baseline_group = parser.add_mutually_exclusive_group()
+    baseline_group.add_argument(
         "--save-baseline",
         metavar="PATH",
-        help="扫描后把本次报告保存为基线 JSON 并退出（不对比；与 --baseline 同时给出时以本参数为准）",
+        help="扫描后把本次报告保存为基线 JSON 并退出（与 --baseline 互斥；建议同时使用 --hash-targets）",
     )
-    parser.add_argument(
+    baseline_group.add_argument(
         "--baseline",
         metavar="PATH",
-        help="加载基线 JSON 并在扫描后对比，报告写入 baseline 元信息与 Finding diff_status"
-        "（基线文件无效时仅告警并跳过对比）",
+        help="加载基线 JSON 并在扫描后对比（与 --save-baseline 互斥；基线文件无效时仅告警并跳过对比）",
     )
     parser.add_argument(
         "--fail-on-new",
@@ -325,6 +431,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--hash-targets",
         action="store_true",
         help="为 HIGH/MEDIUM Finding 的本地文件 target 计算 SHA256（保存基线时写入，便于检测白利用式篡改）",
+    )
+    parser.add_argument(
+        "--fail-on-skipped",
+        action="store_true",
+        help="存在 SKIPPED 项时退出码强制为 3（优先级最高：高于 --fail-on-new/--fail-on-campaign）",
+    )
+    parser.add_argument(
+        "--treat-version-bump-as-benign",
+        action="store_true",
+        help="基线对比时把“签名者相同且版本号前进”的哈希变化视为良性自动更新（BENIGN_UPDATE）",
+    )
+    campaign_group = parser.add_mutually_exclusive_group()
+    campaign_group.add_argument(
+        "--campaign",
+        action="store_true",
+        help="扫描后按 rules/attack_chain.json 的固定剧本关联攻击链，写入报告 campaigns",
+    )
+    campaign_group.add_argument(
+        "--campaign-shadow",
+        action="store_true",
+        help="攻击链影子模式：仍计算并记录 campaigns，但不展示告警样式（与 --campaign 互斥）",
+    )
+    parser.add_argument(
+        "--fail-on-campaign",
+        choices=("high",),
+        metavar="LEVEL",
+        default=None,
+        help="存在指定置信度的攻击链时强制退出码 2（目前仅支持 high）",
     )
     parser.add_argument("--no-memory", action="store_true", help="跳过进程内存扫描（skrapa）")
     parser.add_argument(

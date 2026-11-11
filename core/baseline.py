@@ -1,12 +1,25 @@
 # -*- coding: utf-8 -*-
-"""基线对比（Baseline Diff）引擎（V1.3）。
+"""基线对比（Baseline Diff）引擎（V1.3 起步，V1.4 增强）。
 
 设计目标
 --------
 把一个"静态扫描器"升级为"动态判篡改"工具：把本次扫描结果与用户此前保存的
 基线报告（均由 :func:`reporter.build_report` 生成）按主键逐项对比，输出
 ``NEW`` / ``RESOLVED`` / ``ESCALATED`` / ``DOWNGRADED`` / ``MODIFIED`` /
-``UNCHANGED`` 六种状态。
+``BENIGN_UPDATE`` / ``UNCHANGED`` 七种状态。
+
+V1.4 增强
+---------
+- **严格 target 归一化**（:func:`normalize_target`）：展开环境变量、剥离
+  ``\\\\?\\`` / ``\\??\\`` 长路径前缀、Sysnative→System32、8.3 短名→长名
+  （``GetLongPathNameW``）、normcase、去除尾部空白/分隔符；注册表 target 只做
+  大小写/分隔符归一而不调用文件 API。index / 匹配 / annotate 统一使用该归一化，
+  对比时把结果写入 ``normalized_key``（纯扫描路径不写，保持默认 JSON 与 V1.3 一致）。
+- **良性版本前进豁免**：签名都 valid 但 SHA256 变化（白利用式篡改）时，若两侧
+  签名者一致且 PE 版本（``pe.FileVersion`` 或 ``pe.TimeDateStamp``）单调前进，
+  视为正常自动更新：``treat_version_bump_as_benign=True`` → ``BENIGN_UPDATE``
+  （完全静默）；默认 → 仍为 ``MODIFIED`` 但降为 MEDIUM。签名者不同/版本倒退/
+  无版本信息时保持原 MODIFIED + HIGH。
 
 关键约束
 --------
@@ -37,9 +50,11 @@
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -49,12 +64,13 @@ from .finding import SEVERITY_ORDER, rule_basename
 # 基线报告结构标识（写入报告顶层 baseline 元信息，便于人工识别）
 BASELINE_SCHEMA_VERSION = "1.3"
 
-# 六种对比状态（顺序即报告展示顺序）
+# 七种对比状态（顺序即报告展示顺序；V1.4 增加 BENIGN_UPDATE，原顺序语义保留）
 DIFF_NEW = "NEW"
 DIFF_RESOLVED = "RESOLVED"
 DIFF_ESCALATED = "ESCALATED"
 DIFF_DOWNGRADED = "DOWNGRADED"
 DIFF_MODIFIED = "MODIFIED"
+DIFF_BENIGN_UPDATE = "BENIGN_UPDATE"
 DIFF_UNCHANGED = "UNCHANGED"
 DIFF_STATUSES: tuple[str, ...] = (
     DIFF_NEW,
@@ -62,6 +78,7 @@ DIFF_STATUSES: tuple[str, ...] = (
     DIFF_ESCALATED,
     DIFF_DOWNGRADED,
     DIFF_RESOLVED,
+    DIFF_BENIGN_UPDATE,
     DIFF_UNCHANGED,
 )
 
@@ -125,6 +142,11 @@ class DiffEntry:
     baseline_sha256: str | None = None
     current_sha256: str | None = None
     hash_tamper: bool = False
+    # V1.4：良性版本前进豁免（哈希变化但版本单调前进）
+    version_bump: bool = False
+    benign_update: bool = False
+    baseline_version: Any = None
+    current_version: Any = None
     baseline_finding: dict[str, Any] | None = None
     current_finding: dict[str, Any] | None = None
 
@@ -141,6 +163,10 @@ class DiffEntry:
             "baseline_sha256": self.baseline_sha256,
             "current_sha256": self.current_sha256,
             "hash_tamper": self.hash_tamper,
+            "version_bump": self.version_bump,
+            "benign_update": self.benign_update,
+            "baseline_version": self.baseline_version,
+            "current_version": self.current_version,
         }
 
 
@@ -229,9 +255,201 @@ def _signature_valid(finding: dict[str, Any] | None) -> bool:
     return str(status if status is not _MISSING else "").strip().lower() == _HASH_TAMPER_SIGNATURE_STATUS
 
 
+# ---------------------------------------------------------------------------
+# 严格 target 归一化（V1.4）
+# ---------------------------------------------------------------------------
+
+_TARGET_TYPE_AUTO = "auto"
+_TARGET_TYPE_PATH = "path"
+_TARGET_TYPE_REGISTRY = "registry"
+_TARGET_TYPES: tuple[str, ...] = (_TARGET_TYPE_AUTO, _TARGET_TYPE_PATH, _TARGET_TYPE_REGISTRY)
+
+# 注册表根键简称/全称（auto 启发式；大小写不敏感）
+_REGISTRY_HIVES: frozenset[str] = frozenset(
+    {
+        "HKLM",
+        "HKEY_LOCAL_MACHINE",
+        "HKCU",
+        "HKEY_CURRENT_USER",
+        "HKCR",
+        "HKEY_CLASSES_ROOT",
+        "HKU",
+        "HKEY_USERS",
+        "HKCC",
+        "HKEY_CURRENT_CONFIG",
+    }
+)
+
+# 长路径前缀：\\?\C:\... / \\?\UNC\server\share / \??\C:\...
+_LONG_PATH_PREFIX = "\\\\?\\"
+_NT_OBJECT_PREFIX = "\\??\\"
+
+_LONG_PATH_BUFFER_SIZE = 32768
+_SYSNATIVE_RE = re.compile(r"(?i)\\sysnative(?=\\|$)")
+
+# 懒加载的 kernel32（只在需要解析 8.3 短名时初始化；测试可 mock _get_kernel32）
+_KERNEL32: Any = None
+
+
+def _get_kernel32() -> Any:
+    """返回已声明 GetLongPathNameW 签名的 kernel32（仅在 Windows 上可用）。"""
+    global _KERNEL32
+    if _KERNEL32 is None:
+        kernel32 = ctypes.WinDLL("kernel32.dll")  # type: ignore[attr-defined]
+        kernel32.GetLongPathNameW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_ulong]
+        kernel32.GetLongPathNameW.restype = ctypes.c_ulong
+        _KERNEL32 = kernel32
+    return _KERNEL32
+
+
+def _strip_long_path_prefix(text: str) -> str:
+    """剥离 ``\\\\?\\`` / ``\\??\\`` 前缀；``\\\\?\\UNC\\server\\share`` 还原成 UNC。"""
+    lowered = text.lower()
+    if lowered.startswith(_LONG_PATH_PREFIX.lower()):
+        stripped = text[len(_LONG_PATH_PREFIX) :]
+        if stripped.lower().startswith("unc\\"):
+            return "\\\\" + stripped[4:]
+        return stripped
+    if lowered.startswith(_NT_OBJECT_PREFIX.lower()):
+        stripped = text[len(_NT_OBJECT_PREFIX) :]
+        if stripped.lower().startswith("unc\\"):
+            return "\\\\" + stripped[4:]
+        return stripped
+    return text
+
+
+def _replace_sysnative(text: str) -> str:
+    """把 ``\\Sysnative\\`` 重定向路径替换成 ``\\System32\\``（大小写不敏感）。"""
+    if "sysnative" not in text.lower():
+        return text
+    return _SYSNATIVE_RE.sub(lambda _match: "\\System32", text)
+
+
+def _long_path_from_kernel32(path: str) -> str:
+    """用 ``GetLongPathNameW`` 把 8.3 短名解析为长名；失败/非 Windows 保留原值。"""
+    if not path or os.name != "nt":
+        return path
+    try:
+        kernel32 = _get_kernel32()
+        buffer = ctypes.create_unicode_buffer(_LONG_PATH_BUFFER_SIZE)
+        length = int(kernel32.GetLongPathNameW(path, buffer, _LONG_PATH_BUFFER_SIZE) or 0)
+        if 0 < length < _LONG_PATH_BUFFER_SIZE:
+            value = str(buffer.value or "").strip()
+            if value:
+                return value
+    except Exception:  # noqa: BLE001 - 文件 API 失败一律保留原值，不抛异常
+        return path
+    return path
+
+
+def _looks_like_registry_target(text: str) -> bool:
+    first = text.split("\\", 1)[0].strip().upper()
+    if not first:
+        return False
+    return first in _REGISTRY_HIVES or first.startswith("HKEY_")
+
+
+def _looks_like_path_target(text: str) -> bool:
+    """auto 启发式：盘符 / UNC / 含反斜杠且 basename 带扩展名的相对路径。"""
+    if re.match(r"(?i)^[a-z]:", text):
+        return True
+    if text.startswith("\\\\"):
+        return True
+    if "\\" not in text:
+        return False
+    basename = text.rsplit("\\", 1)[-1]
+    return "." in basename
+
+
+def _resolve_target_type(text: str, target_type: str) -> str:
+    requested = str(target_type or _TARGET_TYPE_AUTO).strip().lower()
+    if requested not in _TARGET_TYPES:
+        requested = _TARGET_TYPE_AUTO
+    if requested != _TARGET_TYPE_AUTO:
+        return requested
+    if _looks_like_registry_target(text):
+        return _TARGET_TYPE_REGISTRY
+    if _looks_like_path_target(text):
+        return _TARGET_TYPE_PATH
+    return _TARGET_TYPE_REGISTRY
+
+
+def _normalize_registry_target(text: str) -> str:
+    """注册表/其它非文件 target：只做大小写、分隔符与空白归一，不调用文件 API。"""
+    value = text.strip().rstrip(" ")
+    value = value.replace("/", "\\")
+    value = re.sub(r"\\{2,}", lambda _match: "\\", value)
+    value = value.rstrip(" \\")
+    return value.lower()
+
+
+def _normalize_path_target(text: str) -> str:
+    """文件路径 target：前缀/Sysnative/8.3/normpath/normcase/尾部归一。"""
+    value = _strip_long_path_prefix(text.strip()).strip()
+    value = _replace_sysnative(value)
+    value = value.rstrip(" ")
+    if os.name == "nt":
+        try:
+            value = os.path.normpath(value)
+        except Exception:  # noqa: BLE001
+            pass
+    # 8.3 短名 -> 长名（GetLongPathNameW 对不存在的路径会失败，此时保留原值）
+    value = _long_path_from_kernel32(value)
+    value = _strip_long_path_prefix(value.strip()).strip().rstrip(" ")
+    if os.name == "nt":
+        try:
+            value = os.path.normpath(value)
+        except Exception:  # noqa: BLE001
+            pass
+    value = os.path.normcase(value)
+    # normpath 已处理尾部分隔符（盘符根 C:\ 会保留），这里再兜一层纯尾随空格
+    return value.rstrip(" ")
+
+
+def normalize_target(target: Any, target_type: str = "auto") -> str:
+    """把 Finding target 归一化为可比对的稳定字符串（V1.4 严格归一化）。
+
+    规则（按顺序）：
+    1. ``None`` / 非字符串防御性转成字符串（失败返回空串）；
+    2. 环境变量展开（复用 :func:`core.utils.expand_vars`）；
+    3. 剥离 ``\\\\?\\`` / ``\\??\\`` 长路径前缀（含 ``\\\\?\\UNC`` 还原）；
+    4. ``\\Sysnative\\`` → ``\\System32\\``（大小写不敏感）；
+    5. ``target_type="path"``（或 auto 判定为路径）时：8.3 短名 → 长名
+       （``kernel32.GetLongPathNameW``，仅 Windows；失败/异常保留原值）、
+       normpath + normcase、去尾部空白/分隔符（保留盘符根）；不存在的路径不会
+       抛异常，退化为小写规范化路径；
+    6. ``target_type="registry"`` 或 auto 判定为非文件路径：只做大小写、分隔符
+       与空白归一，**不调用任何文件 API**（注册表键、进程名、任务名等）；
+    7. ``target_type="auto"`` 启发式：盘符 / UNC / 含反斜杠且 basename 带扩展名 →
+       路径，否则按注册表/其它处理。
+
+    Returns:
+        归一化后的字符串（永不为 None）。
+    """
+    if target is None:
+        return ""
+    if isinstance(target, str):
+        text = target
+    else:
+        try:
+            text = str(target)
+        except Exception:  # noqa: BLE001
+            return ""
+    text = utils.expand_vars(text)
+    if not isinstance(text, str):  # pragma: no cover - expand_vars 始终返回 str
+        text = str(text)
+    text = text.strip()
+    if not text:
+        return ""
+    resolved_type = _resolve_target_type(text, target_type)
+    if resolved_type == _TARGET_TYPE_REGISTRY:
+        return _normalize_registry_target(text)
+    return _normalize_path_target(text)
+
+
 def target_key(target: Any) -> str:
-    """主键中的 target 归一化：去空白 + 大小写不敏感（Windows 路径语义）。"""
-    return str(target or "").strip().lower()
+    """主键中的 target 归一化（V1.4 起复用 :func:`normalize_target`）。"""
+    return normalize_target(target, _TARGET_TYPE_AUTO)
 
 
 # ---------------------------------------------------------------------------
@@ -445,10 +663,145 @@ def _hash_tamper_detected(
     return _signature_valid(baseline_finding) and _signature_valid(current_finding)
 
 
+# ---------------------------------------------------------------------------
+# 良性版本前进判定（V1.4）
+# ---------------------------------------------------------------------------
+
+
+def _parse_file_version(value: Any) -> tuple[int, ...] | None:
+    """把 ``pe.FileVersion``（"a.b.c.d" / "a,b,c,d" / 数字列表）解析为数值元组。"""
+    if value is None or value is _MISSING or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return (value,)
+    if isinstance(value, (list, tuple)):
+        numbers: list[int] = []
+        for item in value:
+            if isinstance(item, bool):
+                return None
+            try:
+                numbers.append(int(item))
+            except (TypeError, ValueError):
+                return None
+        return tuple(numbers) if numbers else None
+    text = str(value).strip()
+    if not text:
+        return None
+    pieces = [piece for piece in re.split(r"[.,\s]+", text) if piece]
+    if not pieces:
+        return None
+    numbers = []
+    for piece in pieces:
+        try:
+            numbers.append(int(piece))
+        except (TypeError, ValueError):
+            return None
+    return tuple(numbers)
+
+
+def _parse_timestamp(value: Any) -> int | None:
+    """把 ``pe.TimeDateStamp`` 防御性解析为整数；bool/非法值返回 None。"""
+    if value is None or value is _MISSING or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text, 10)
+    except (TypeError, ValueError):
+        try:
+            return int(text, 0)
+        except (TypeError, ValueError):
+            return None
+
+
+def _pe_versions(finding: dict[str, Any] | None) -> tuple[tuple[int, ...] | None, int | None]:
+    """提取 ``(pe.FileVersion 元组, pe.TimeDateStamp 整数)``；缺失/类型异常为 None。"""
+    evidence = _evidence_of(finding)
+    file_version = _dig(evidence, ("pe", "FileVersion"))
+    if file_version is _MISSING:
+        file_version = _dig(evidence, ("FileVersion",))
+    timestamp = _dig(evidence, ("pe", "TimeDateStamp"))
+    if timestamp is _MISSING:
+        timestamp = _dig(evidence, ("TimeDateStamp",))
+    return _parse_file_version(file_version), _parse_timestamp(timestamp)
+
+
+def _compare_version_tuples(baseline: tuple[int, ...], current: tuple[int, ...]) -> int:
+    """比较两个版本元组：1=前进、0=相同、-1=倒退（缺失位补 0）。"""
+    length = max(len(baseline), len(current))
+    left = baseline + (0,) * (length - len(baseline))
+    right = current + (0,) * (length - len(current))
+    if right > left:
+        return 1
+    if right < left:
+        return -1
+    return 0
+
+
+def _signer_of(finding: dict[str, Any] | None) -> str:
+    evidence = _evidence_of(finding)
+    value = _dig(evidence, ("signature", "signer"))
+    if value is _MISSING:
+        value = _dig(evidence, ("signer",))
+    if value is _MISSING or value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _same_nonempty_signer(
+    baseline_finding: dict[str, Any] | None,
+    current_finding: dict[str, Any] | None,
+) -> bool:
+    """两侧签名者是否一致且非空（大小写不敏感）。"""
+    baseline_signer = _signer_of(baseline_finding)
+    return bool(baseline_signer) and baseline_signer == _signer_of(current_finding)
+
+
+def _version_progression(
+    baseline_finding: dict[str, Any] | None,
+    current_finding: dict[str, Any] | None,
+) -> tuple[bool, Any, Any]:
+    """判定版本是否单调前进，返回 ``(version_bump, baseline_version, current_version)``。
+
+    判定顺序：优先 ``pe.FileVersion`` 数值元组（按位比较，缺失高位补 0）；
+    FileVersion 相同或缺失时再比较 ``pe.TimeDateStamp`` 整数。任何字段缺失、
+    类型异常、版本相同或倒退都视为"无版本前进"（version_bump=False，保持 HIGH）。
+    """
+    baseline_fv, baseline_ts = _pe_versions(baseline_finding)
+    current_fv, current_ts = _pe_versions(current_finding)
+
+    if baseline_fv is not None and current_fv is not None:
+        comparison = _compare_version_tuples(baseline_fv, current_fv)
+        if comparison > 0:
+            return True, baseline_fv, current_fv
+        if comparison < 0:
+            return False, baseline_fv, current_fv
+        # FileVersion 相同：允许 TimeDateStamp 前进（重新编译但未改版本号）
+        if baseline_ts is not None and current_ts is not None and current_ts > baseline_ts:
+            return True, baseline_ts, current_ts
+        return False, baseline_fv, current_fv
+
+    if baseline_ts is not None and current_ts is not None:
+        if current_ts > baseline_ts:
+            return True, baseline_ts, current_ts
+        return False, baseline_ts, current_ts
+
+    baseline_token = baseline_fv if baseline_fv is not None else baseline_ts
+    current_token = current_fv if current_fv is not None else current_ts
+    return False, baseline_token, current_token
+
+
 def _make_entry(
     rule_base: str,
     baseline_finding: dict[str, Any] | None,
     current_finding: dict[str, Any] | None,
+    *,
+    treat_version_bump_as_benign: bool = False,
 ) -> DiffEntry:
     current_target = current_finding.get("target") if isinstance(current_finding, dict) else None
     baseline_target = baseline_finding.get("target") if isinstance(baseline_finding, dict) else None
@@ -478,7 +831,24 @@ def _make_entry(
         return entry
     entry.hash_tamper = _hash_tamper_detected(baseline_finding, current_finding)
     if entry.hash_tamper:
-        # 哈希变化优先于严重等级变化：强制 MODIFIED + HIGH（见 annotate_findings）
+        # 哈希变化优先于严重等级变化；但"签名者一致 + 版本单调前进"视为正常自动更新（V1.4）。
+        version_bump, baseline_version, current_version = _version_progression(
+            baseline_finding, current_finding
+        )
+        if version_bump and _same_nonempty_signer(baseline_finding, current_finding):
+            entry.version_bump = True
+            entry.baseline_version = baseline_version
+            entry.current_version = current_version
+            if treat_version_bump_as_benign:
+                # 完全静默：不强制 HIGH、不写篡改 detail
+                entry.status = DIFF_BENIGN_UPDATE
+                entry.benign_update = True
+            else:
+                # 仍为 MODIFIED，但降为 MEDIUM（annotate 追加"版本正常前进"说明）
+                entry.status = DIFF_MODIFIED
+                entry.current_severity = "MEDIUM"
+            return entry
+        # 签名者不同 / 版本倒退 / 无版本信息：保持原逻辑 MODIFIED + HIGH
         entry.status = DIFF_MODIFIED
         entry.current_severity = "HIGH"
         return entry
@@ -500,6 +870,7 @@ def diff_reports(
     current_report: Any,
     *,
     baseline_path: str = "",
+    treat_version_bump_as_benign: bool = False,
 ) -> BaselineDiff:
     """对比两份 ``build_report()`` 结果，返回 :class:`BaselineDiff`。
 
@@ -507,6 +878,9 @@ def diff_reports(
         baseline_report: 基线报告 dict（结构异常时按空基线处理，全部标记 NEW）。
         current_report: 本次报告 dict（或 Finding 列表）。
         baseline_path: 基线文件路径（写入报告元信息，仅用于展示）。
+        treat_version_bump_as_benign: 哈希变化且"签名者一致 + 版本单调前进"时，
+            True 输出 ``BENIGN_UPDATE``（完全静默）；False（默认）仍输出
+            ``MODIFIED`` 但降为 MEDIUM。
 
     主键匹配分两阶段：先配对"基线/当前都存在"的 Finding（多个规则基名任一命中
     即视为同一事实），再把未配对项标为 RESOLVED / NEW，避免 merged_rules 或
@@ -532,7 +906,14 @@ def diff_reports(
             continue
         paired_baseline.add(id(baseline_finding))
         paired_current.add(id(current_finding))
-        entries.append(_make_entry(key[1], baseline_finding, current_finding))
+        entries.append(
+            _make_entry(
+                key[1],
+                baseline_finding,
+                current_finding,
+                treat_version_bump_as_benign=treat_version_bump_as_benign,
+            )
+        )
 
     # 阶段 2：未配对的基线项 -> RESOLVED；未配对的当前项 -> NEW
     for key in sorted(baseline_index):
@@ -540,13 +921,17 @@ def diff_reports(
         if id(baseline_finding) in paired_baseline:
             continue
         paired_baseline.add(id(baseline_finding))
-        entries.append(_make_entry(key[1], baseline_finding, None))
+        entries.append(
+            _make_entry(key[1], baseline_finding, None, treat_version_bump_as_benign=treat_version_bump_as_benign)
+        )
     for key in sorted(current_index):
         current_finding = current_index[key]
         if id(current_finding) in paired_current:
             continue
         paired_current.add(id(current_finding))
-        entries.append(_make_entry(key[1], None, current_finding))
+        entries.append(
+            _make_entry(key[1], None, current_finding, treat_version_bump_as_benign=treat_version_bump_as_benign)
+        )
 
     counts = {status: 0 for status in DIFF_STATUSES}
     for entry in entries:
@@ -570,7 +955,7 @@ def has_new_high_medium(diff: BaselineDiff | None) -> bool:
 
 
 def diff_counts(diff: BaselineDiff | None) -> dict[str, int]:
-    """返回六种状态计数（缺失状态补 0，保证 UI 可直接取键）。"""
+    """返回七种状态计数（缺失状态补 0，保证 UI 可直接取键）。"""
     counts = {status: 0 for status in DIFF_STATUSES}
     if isinstance(diff, BaselineDiff):
         for status, value in (diff.counts or {}).items():
@@ -594,6 +979,15 @@ def _key_map(diff: BaselineDiff) -> dict[tuple[str, str], DiffEntry]:
     return mapping
 
 
+def _attach_version_evidence(evidence: dict[str, Any], entry: DiffEntry) -> None:
+    """把版本前进信息写入 annotate 输出的 evidence（不修改 DiffEntry/入参）。"""
+    evidence["version_bump"] = True
+    if entry.baseline_version is not None:
+        evidence["baseline_version"] = entry.baseline_version
+    if entry.current_version is not None:
+        evidence["current_version"] = entry.current_version
+
+
 def annotate_findings(
     findings: Iterable[dict[str, Any]] | None,
     diff: BaselineDiff | None,
@@ -601,7 +995,13 @@ def annotate_findings(
     """给当前 Finding 列表挂载 ``diff_status``，并追加 RESOLVED 基线项。
 
     - 返回新列表，不修改入参 Finding；
-    - ``hash_tamper`` 条目：期望 Finding 提升为 HIGH，并在 detail 追加篡改提示；
+    - 有 diff 时每个返回项（含追加的 RESOLVED 项）写 ``normalized_key``（V1.4）；
+      无 diff 的纯扫描路径不新增该键，保证默认 JSON 与 V1.3 一致；
+    - ``BENIGN_UPDATE`` 条目完全静默：不提升严重等级、不追加篡改提示，仅写
+      ``evidence.benign_update=True`` 与版本信息；
+    - ``MODIFIED`` 且版本前进（``entry.version_bump``）：降为 MEDIUM，detail 追加
+      "版本正常前进（自动更新），已降级为 MEDIUM"，不再写 HIGH 篡改措辞；
+    - 其它 ``hash_tamper`` 条目：提升为 HIGH，并在 detail 追加篡改提示；
     - RESOLVED 条目以基线 Finding 的拷贝形式追加（``diff_status="RESOLVED"``）。
     """
     if not isinstance(diff, BaselineDiff):
@@ -622,7 +1022,9 @@ def annotate_findings(
                     entry = candidate
                     break
         if entry is None:
-            annotated.append(dict(finding))
+            item = dict(finding)
+            item["normalized_key"] = normalize_target(item.get("target"))
+            annotated.append(item)
             continue
         if str(finding.get("diff_status") or "") == DIFF_RESOLVED:
             already_annotated = True
@@ -630,7 +1032,23 @@ def annotate_findings(
         evidence = dict(_evidence_of(finding))
         item["evidence"] = evidence
         item["diff_status"] = entry.status
-        if entry.hash_tamper:
+        item["normalized_key"] = normalize_target(item.get("target"))
+        if entry.status == DIFF_BENIGN_UPDATE:
+            # 完全静默：不提升严重等级、不写篡改 detail；reporter 负责中性样式
+            evidence["benign_update"] = True
+            _attach_version_evidence(evidence, entry)
+        elif entry.hash_tamper and entry.version_bump:
+            # 版本正常前进（自动更新）：降为 MEDIUM，不写"疑似被篡改"措辞
+            item["severity"] = "MEDIUM"
+            evidence["hash_tamper"] = True
+            if entry.baseline_sha256:
+                evidence["baseline_sha256"] = entry.baseline_sha256
+            _attach_version_evidence(evidence, entry)
+            detail = str(item.get("detail") or "")
+            message = "版本正常前进（自动更新），已降级为 MEDIUM"
+            if message not in detail:
+                item["detail"] = f"{detail}；{message}" if detail else message
+        elif entry.hash_tamper:
             item["severity"] = "HIGH"
             evidence["hash_tamper"] = True
             if entry.baseline_sha256:
@@ -647,5 +1065,6 @@ def annotate_findings(
             evidence["resolved"] = True
             item["evidence"] = evidence
             item["diff_status"] = DIFF_RESOLVED
+            item["normalized_key"] = normalize_target(item.get("target"))
             annotated.append(item)
     return annotated

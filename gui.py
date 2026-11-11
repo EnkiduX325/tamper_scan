@@ -34,7 +34,7 @@ import threading
 import traceback
 import unicodedata
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import tkinter as tk
 from tkinter import filedialog, font as tkfont, messagebox, ttk
@@ -167,6 +167,192 @@ def baseline_label_text(path: Any) -> str:
         return "对比基线: （未加载）"
     name = Path(raw).name
     return f"对比基线: {name or raw}"
+
+
+# ---------------------------------------------------------------------------
+# 攻击链视图（V1.4）
+# ---------------------------------------------------------------------------
+
+#: 攻击链列表列定义：(key, 表头, 默认宽度)
+CAMPAIGN_COLUMNS: tuple[tuple[str, str, int], ...] = (
+    ("name", "攻击链", 220),
+    ("confidence", "置信度", 70),
+    ("steps", "步骤", 56),
+    ("findings", "Finding", 70),
+)
+
+#: 置信度 -> 列表行颜色（high 红 / medium 橙 / low 黄）
+CAMPAIGN_CONFIDENCE_COLORS: dict[str, str] = {
+    "high": "#C42B1C",
+    "medium": "#F7630C",
+    "low": "#C19C00",
+}
+
+#: 置信度 -> 中文标签
+CAMPAIGN_CONFIDENCE_LABELS: dict[str, str] = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+}
+
+#: 置信度 -> Treeview tag 名
+CAMPAIGN_CONFIDENCE_TAGS: dict[str, str] = {
+    "high": "campaign_high",
+    "medium": "campaign_medium",
+    "low": "campaign_low",
+}
+
+#: 无 campaign 时的提示文案（固定剧本，不做自由组合）
+CAMPAIGN_EMPTY_TEXT = "未发现满足固定剧本的攻击链（绝无自由组合）"
+
+#: 右侧步骤时间线列定义
+CAMPAIGN_STEP_COLUMNS: tuple[tuple[str, str, int], ...] = (
+    ("step", "#", 44),
+    ("tactic", "战术", 100),
+    ("rules", "规则", 200),
+    ("targets", "目标", 320),
+)
+
+
+def _clean_match_value(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _normalize_confidence(confidence: Any) -> str:
+    return str(confidence or "").strip().lower()
+
+
+def campaign_confidence_tag(confidence: Any) -> str:
+    """置信度 -> Treeview 行 tag；未知/空值返回空串（不加 tag）。"""
+    return CAMPAIGN_CONFIDENCE_TAGS.get(_normalize_confidence(confidence), "")
+
+
+def campaign_confidence_label(confidence: Any) -> str:
+    """置信度 -> 中文标签；未知/空值返回「未知」。"""
+    return CAMPAIGN_CONFIDENCE_LABELS.get(_normalize_confidence(confidence), "未知")
+
+
+def campaign_finding_count(campaign: Any) -> int:
+    """campaign 的 finding 数（优先 finding_count，缺失时按步骤 findings 统计）。"""
+    if not isinstance(campaign, dict):
+        return 0
+    count = campaign.get("finding_count")
+    if isinstance(count, bool):
+        count = None
+    if isinstance(count, int):
+        return max(0, count)
+    return len(campaign_finding_keys(campaign))
+
+
+def campaign_summary_text(campaign: Any) -> str:
+    """campaign 一句话摘要：``名称（置信度 高，2 步 / 3 条 finding）``。"""
+    if not isinstance(campaign, dict) or not campaign:
+        return ""
+    name = str(campaign.get("name") or campaign.get("chain_id") or "未命名攻击链")
+    label = campaign_confidence_label(campaign.get("confidence"))
+    steps = campaign.get("steps")
+    step_count = len(steps) if isinstance(steps, (list, tuple)) else 0
+    count = campaign_finding_count(campaign)
+    shadow = " · 影子（仅观察）" if campaign.get("shadow") else ""
+    return f"{name}（置信度 {label}，{step_count} 步 / {count} 条 finding{shadow}）"
+
+
+def campaign_finding_keys(campaign: Any) -> list[tuple[str, str]]:
+    """提取 campaign 全部步骤内 ``(rule_id, target)``，去重（忽略大小写）且容错缺字段。"""
+    if not isinstance(campaign, dict):
+        return []
+    steps = campaign.get("steps")
+    if not isinstance(steps, (list, tuple)):
+        return []
+    keys: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        findings = step.get("findings")
+        if not isinstance(findings, (list, tuple)):
+            continue
+        for item in findings:
+            if not isinstance(item, dict):
+                continue
+            rule = _clean_match_value(item.get("rule_id"))
+            target = _clean_match_value(item.get("target"))
+            if not rule and not target:
+                continue
+            normalized = (rule.casefold(), target.casefold())
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            keys.append((rule, target))
+    return keys
+
+
+def finding_match_key(finding: Any) -> tuple[str, str] | None:
+    """Finding 与 campaign 联动用的归一化匹配键 ``(rule_id, target)``；空返回 None。"""
+    if not isinstance(finding, dict):
+        return None
+    rule = _clean_match_value(finding.get("rule_id"))
+    target = _clean_match_value(finding.get("target"))
+    if not rule and not target:
+        return None
+    return (rule.casefold(), target.casefold())
+
+
+def campaign_row_values(campaign: Any) -> tuple[str, str, str, str]:
+    """攻击链列表一行的显示值（名称/置信度/步骤数/finding 数）。"""
+    if not isinstance(campaign, dict):
+        return ("", "未知", "0", "0")
+    name = str(campaign.get("name") or campaign.get("chain_id") or "未命名攻击链")
+    label = campaign_confidence_label(campaign.get("confidence"))
+    steps = campaign.get("steps")
+    step_count = len(steps) if isinstance(steps, (list, tuple)) else 0
+    return (name, label, str(step_count), str(campaign_finding_count(campaign)))
+
+
+def campaign_step_rows(campaign: Any) -> list[tuple[str, str, str, str]]:
+    """把 campaign.steps 转成时间线行（# / 战术 / 规则 / 目标摘要），防御性解析。"""
+    if not isinstance(campaign, dict):
+        return []
+    steps = campaign.get("steps")
+    if not isinstance(steps, (list, tuple)):
+        return []
+    rows: list[tuple[str, str, str, str]] = []
+    for index, step in enumerate(steps, 1):
+        if not isinstance(step, dict):
+            continue
+        tactic = str(step.get("tactic") or "")
+        rule_ids = step.get("rule_ids")
+        if isinstance(rule_ids, (list, tuple)):
+            rules = ", ".join(str(item) for item in rule_ids if _clean_match_value(item))
+        else:
+            rules = str(rule_ids or "")
+        targets: list[str] = []
+        findings = step.get("findings")
+        if isinstance(findings, (list, tuple)):
+            for item in findings:
+                if not isinstance(item, dict):
+                    continue
+                target = _clean_match_value(item.get("target"))
+                if target and target not in targets:
+                    targets.append(target)
+        rows.append(
+            (
+                str(index),
+                _truncate_display(tactic, 18),
+                _truncate_display(rules, 46),
+                _truncate_display("; ".join(targets), 64),
+            )
+        )
+    return rows
+
+
+def _import_correlator() -> Any:
+    """延迟导入 ``core.correlator``（V1.4 并行模块）；不可用时返回 ``None``。"""
+    try:
+        from core import correlator
+    except Exception:  # noqa: BLE001 - 模块缺失/导入失败时 GUI 仍需可用
+        return None
+    return correlator
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +607,48 @@ class FindingTree(tk.Frame):
         self.tree.selection_set(first)
         self.tree.focus(first)
         self.tree.see(first)
+
+    def select_by_keys(self, keys: Iterable[tuple[str, str]]) -> list[str]:
+        """按 ``(rule_id, target)`` 多选匹配行并滚动到第一条；返回选中 iid 列表。
+
+        供攻击链视图联动使用：找不到匹配行时返回空列表，不改变当前选择。
+        """
+        wanted: set[tuple[str, str]] = set()
+        for rule, target in keys or []:
+            normalized = finding_match_key({"rule_id": rule, "target": target})
+            if normalized is not None:
+                wanted.add(normalized)
+        if not wanted:
+            return []
+        matched = [
+            iid
+            for iid, finding in self._findings.items()
+            if finding_match_key(finding) in wanted
+        ]
+        if not matched:
+            return []
+        self.tree.selection_set(matched)
+        first = matched[0]
+        self.tree.focus(first)
+        self.tree.see(first)
+        return matched
+
+    def select_by_findings(self, findings: Iterable[dict[str, Any]]) -> list[str]:
+        """按 finding 身份（对象 id）多选匹配行；供攻击链联动优先使用。"""
+        wanted_ids: set[int] = set()
+        for finding in findings or []:
+            if isinstance(finding, dict):
+                wanted_ids.add(id(finding))
+        if not wanted_ids:
+            return []
+        matched = [iid for iid, finding in self._findings.items() if id(finding) in wanted_ids]
+        if not matched:
+            return []
+        self.tree.selection_set(matched)
+        first = matched[0]
+        self.tree.focus(first)
+        self.tree.see(first)
+        return matched
 
     def _handle_select_event(self, _event: tk.Event) -> None:
         if self._on_select is not None:
@@ -806,6 +1034,276 @@ class DetailPanel(tk.Frame):
 
 
 # ---------------------------------------------------------------------------
+# 攻击链视图（V1.4）
+# ---------------------------------------------------------------------------
+
+
+class CampaignsWindow(tk.Toplevel):
+    """攻击链独立窗口：左侧 campaign 列表，右侧选中 campaign 的步骤时间线。
+
+    纯只读展示；选择/双击 campaign 时通过 ``on_select`` 回调让主窗口结果列表联动。
+    无 campaign 时显示固定剧本提示文案，不做任何自由组合。
+    """
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        campaigns: list[dict[str, Any]] | None = None,
+        on_select: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        super().__init__(master)
+        self._on_select = on_select
+        self._campaigns: list[dict[str, Any]] = []
+        self._by_iid: dict[str, dict[str, Any]] = {}
+
+        self.title("攻击链")
+        self.configure(bg=COLORS["bg"])
+        self.geometry("1000x620")
+        self.minsize(780, 480)
+        try:
+            self.transient(master)
+        except tk.TclError:
+            pass
+        self.protocol("WM_DELETE_WINDOW", self._on_close_pressed)
+        self.bind("<Escape>", lambda _event: self._on_close_pressed())
+        self._build_ui()
+        self._center_on_parent(master)
+        self.refresh(campaigns)
+
+    # -- 布局 --------------------------------------------------------------
+    def _build_ui(self) -> None:
+        outer = tk.Frame(self, bg=COLORS["bg"])
+        outer.pack(fill="both", expand=True, padx=16, pady=14)
+        self._outer = outer
+
+        header = tk.Frame(outer, bg=COLORS["bg"])
+        header.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            header,
+            text="攻击链",
+            bg=COLORS["bg"],
+            fg=COLORS["text"],
+            font=(FONT_FAMILY, 14, "bold"),
+            anchor="w",
+        ).pack(side="left")
+        self._count_var = tk.StringVar(value="0 条攻击链")
+        tk.Label(
+            header,
+            textvariable=self._count_var,
+            bg=COLORS["bg"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9),
+            anchor="e",
+        ).pack(side="right")
+
+        self._hint_var = tk.StringVar(value="")
+        tk.Label(
+            outer,
+            textvariable=self._hint_var,
+            bg=COLORS["bg"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9),
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(0, 8))
+
+        self._paned = tk.PanedWindow(
+            outer,
+            orient="horizontal",
+            bg=COLORS["bg"],
+            bd=0,
+            sashwidth=6,
+            sashrelief="flat",
+            handlesize=0,
+            showhandle=False,
+        )
+
+        left = tk.Frame(
+            self._paned,
+            bg=COLORS["card"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+            bd=0,
+        )
+        tk.Label(
+            left,
+            text="攻击链列表",
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 4))
+        campaign_wrap = tk.Frame(left, bg=COLORS["card"])
+        campaign_wrap.pack(fill="both", expand=True, padx=(10, 4), pady=(0, 10))
+        campaign_wrap.grid_rowconfigure(0, weight=1)
+        campaign_wrap.grid_columnconfigure(0, weight=1)
+        self._campaign_tree = ttk.Treeview(
+            campaign_wrap,
+            columns=[column[0] for column in CAMPAIGN_COLUMNS],
+            show="headings",
+            selectmode="browse",
+        )
+        for key, title, width in CAMPAIGN_COLUMNS:
+            self._campaign_tree.heading(key, text=title, anchor="w")
+            self._campaign_tree.column(
+                key, width=width, minwidth=44, stretch=(key == "name"), anchor="w"
+            )
+        for confidence, color in CAMPAIGN_CONFIDENCE_COLORS.items():
+            tag = CAMPAIGN_CONFIDENCE_TAGS.get(confidence)
+            if tag:
+                self._campaign_tree.tag_configure(tag, foreground=color)
+        campaign_scroll = ttk.Scrollbar(
+            campaign_wrap, orient="vertical", command=self._campaign_tree.yview
+        )
+        self._campaign_tree.configure(yscrollcommand=campaign_scroll.set)
+        self._campaign_tree.grid(row=0, column=0, sticky="nsew")
+        campaign_scroll.grid(row=0, column=1, sticky="ns")
+        self._campaign_tree.bind("<<TreeviewSelect>>", self._handle_campaign_select)
+        self._campaign_tree.bind("<Double-1>", self._handle_campaign_select)
+
+        right = tk.Frame(
+            self._paned,
+            bg=COLORS["card"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+            bd=0,
+        )
+        tk.Label(
+            right,
+            text="步骤时间线",
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 4))
+        self._detail_var = tk.StringVar(value="选择左侧攻击链查看步骤时间线")
+        tk.Label(
+            right,
+            textvariable=self._detail_var,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=(FONT_FAMILY, 10, "bold"),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(fill="x", padx=12, pady=(0, 6))
+
+        steps_wrap = tk.Frame(right, bg=COLORS["card"])
+        steps_wrap.pack(fill="both", expand=True, padx=(10, 4), pady=(0, 10))
+        steps_wrap.grid_rowconfigure(0, weight=1)
+        steps_wrap.grid_columnconfigure(0, weight=1)
+        self._steps_tree = ttk.Treeview(
+            steps_wrap,
+            columns=[column[0] for column in CAMPAIGN_STEP_COLUMNS],
+            show="headings",
+            selectmode="none",
+        )
+        for key, title, width in CAMPAIGN_STEP_COLUMNS:
+            self._steps_tree.heading(key, text=title, anchor="w")
+            self._steps_tree.column(
+                key, width=width, minwidth=40, stretch=(key in ("rules", "targets")), anchor="w"
+            )
+        steps_scroll = ttk.Scrollbar(steps_wrap, orient="vertical", command=self._steps_tree.yview)
+        self._steps_tree.configure(yscrollcommand=steps_scroll.set)
+        self._steps_tree.grid(row=0, column=0, sticky="nsew")
+        steps_scroll.grid(row=0, column=1, sticky="ns")
+
+        self._paned.add(left, minsize=420, stretch="always")
+        self._paned.add(right, minsize=360, stretch="always")
+
+        self._empty_label = tk.Label(
+            outer,
+            text=CAMPAIGN_EMPTY_TEXT,
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 11),
+            justify="center",
+            padx=20,
+            pady=40,
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+
+    def _center_on_parent(self, master: tk.Misc) -> None:
+        try:
+            self.update_idletasks()
+            width, height = 1000, 620
+            x = master.winfo_rootx() + max(0, (master.winfo_width() - width) // 2)
+            y = master.winfo_rooty() + max(0, (master.winfo_height() - height) // 2)
+            self.geometry(f"{width}x{height}+{x}+{y}")
+        except tk.TclError:
+            pass
+
+    # -- 数据 --------------------------------------------------------------
+    def refresh(self, campaigns: list[dict[str, Any]] | None) -> None:
+        """用最新 campaign 列表刷新窗口内容（重复打开窗口时复用）。"""
+        items = [item for item in (campaigns or []) if isinstance(item, dict)]
+        self._campaigns = items
+        self._by_iid.clear()
+        for iid in self._campaign_tree.get_children():
+            self._campaign_tree.delete(iid)
+        self._clear_steps()
+        for index, campaign in enumerate(items):
+            iid = str(index)
+            self._by_iid[iid] = campaign
+            tag = campaign_confidence_tag(campaign.get("confidence"))
+            tags: tuple[str, ...] = (tag,) if tag else ()
+            self._campaign_tree.insert(
+                "", "end", iid=iid, values=campaign_row_values(campaign), tags=tags
+            )
+        self._count_var.set(f"{len(items)} 条攻击链")
+        if not items:
+            self._detail_var.set(CAMPAIGN_EMPTY_TEXT)
+            self._hint_var.set("固定剧本匹配：本次扫描未命中任何攻击链")
+            self._paned.pack_forget()
+            self._empty_label.pack(fill="both", expand=True)
+            return
+        self._empty_label.pack_forget()
+        self._paned.pack(fill="both", expand=True)
+        self._hint_var.set("固定剧本匹配结果 · 选中/双击攻击链可在主窗口联动高亮关联 findings")
+        first = "0"
+        self._campaign_tree.selection_set(first)
+        self._campaign_tree.focus(first)
+        self._campaign_tree.see(first)
+        self._show_campaign(items[0])
+        self._emit_select(items[0])
+
+    def selected_campaign(self) -> dict[str, Any] | None:
+        selection = self._campaign_tree.selection()
+        if not selection:
+            return None
+        return self._by_iid.get(str(selection[0]))
+
+    def _clear_steps(self) -> None:
+        for iid in self._steps_tree.get_children():
+            self._steps_tree.delete(iid)
+
+    def _show_campaign(self, campaign: dict[str, Any]) -> None:
+        self._detail_var.set(campaign_summary_text(campaign))
+        self._clear_steps()
+        for row in campaign_step_rows(campaign):
+            self._steps_tree.insert("", "end", values=row)
+
+    def _handle_campaign_select(self, _event: Any = None) -> None:
+        campaign = self.selected_campaign()
+        if campaign is None:
+            return
+        self._show_campaign(campaign)
+        self._emit_select(campaign)
+
+    def _emit_select(self, campaign: dict[str, Any]) -> None:
+        if self._on_select is None:
+            return
+        try:
+            self._on_select(campaign)
+        except Exception:  # noqa: BLE001 - 联动回调异常不能拖垮攻击链窗口
+            pass
+
+    def _on_close_pressed(self) -> None:
+        self.destroy()
+
+
+# ---------------------------------------------------------------------------
 # 主应用
 # ---------------------------------------------------------------------------
 
@@ -834,6 +1332,11 @@ class App(tk.Tk):
         self._baseline_path = ""
         self._baseline_diff: baseline.BaselineDiff | None = None
         self._baseline_warnings: list[str] = []
+        # 攻击链（V1.4）：按需分析；不点击「攻击链」时不影响 V1.3 的任何行为
+        self._campaigns: list[dict[str, Any]] = []
+        self._campaign_data: dict[str, Any] = {}
+        self._campaign_stats: dict[str, Any] = {}
+        self._campaign_window: CampaignsWindow | None = None
 
         self._build_styles()
         self._build_ui()
@@ -1035,6 +1538,14 @@ class App(tk.Tk):
         )
         self.save_baseline_button.pack(side="left", padx=(10, 0))
 
+        self.campaign_button = ttk.Button(
+            inner,
+            text="攻击链",
+            style="Secondary.TButton",
+            command=self._safe(self._on_show_campaigns),
+        )
+        self.campaign_button.pack(side="left", padx=(10, 0))
+
         self.export_button = ttk.Button(
             inner,
             text="导出报告",
@@ -1209,6 +1720,11 @@ class App(tk.Tk):
             return
         self._scanning = True
         self._result = None
+        # 新扫描开始时旧攻击链结果即失效：关闭视图并清空缓存（不点击攻击链时无影响）
+        self._close_campaign_window()
+        self._campaigns = []
+        self._campaign_data = {}
+        self._campaign_stats = {}
         self._reset_view()
         self._set_controls(scanning=True)
         self.status_var.set("正在扫描…")
@@ -1460,6 +1976,119 @@ class App(tk.Tk):
         report["findings"] = baseline.enrich_findings_with_hashes(report["findings"])
         return reporter.write_json(report, path)
 
+    # -- 攻击链（V1.4） ----------------------------------------------------
+    def _close_campaign_window(self) -> None:
+        window = self._campaign_window
+        self._campaign_window = None
+        if window is None:
+            return
+        try:
+            if window.winfo_exists():
+                window.destroy()
+        except tk.TclError:
+            pass
+
+    def _correlate_findings(self, findings: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """只读调用 ``core.correlator.correlate``；模块缺失/异常时弹 warning 返回 None。"""
+        correlator = _import_correlator()
+        if correlator is None:
+            self.status_var.set("攻击链分析不可用")
+            messagebox.showwarning(
+                "攻击链分析不可用",
+                "当前版本缺少 core.correlator 模块，无法进行攻击链分析。",
+                parent=self,
+            )
+            return None
+        try:
+            data = correlator.correlate(findings)
+        except Exception as exc:  # noqa: BLE001 - 攻击链分析失败只弹窗，不崩溃
+            self.status_var.set("攻击链分析失败")
+            messagebox.showwarning(
+                "攻击链分析失败", f"{type(exc).__name__}: {exc}", parent=self
+            )
+            return None
+        if not isinstance(data, dict):
+            data = {}
+        if not isinstance(data.get("campaigns"), list):
+            data["campaigns"] = []
+        if not isinstance(data.get("stats"), dict):
+            data["stats"] = {}
+        if not isinstance(data.get("suppressed"), list):
+            data["suppressed"] = []
+        return data
+
+    def _on_show_campaigns(self) -> None:
+        """「攻击链」按钮：无结果提示先扫描；有结果分析并打开/刷新攻击链视图。"""
+        if self._result is None:
+            messagebox.showinfo("攻击链", "请先完成一次扫描，再查看攻击链。", parent=self)
+            return
+        data = self._correlate_findings(self._result.findings)
+        if data is None:
+            return
+        self._campaign_data = data
+        self._campaigns = [item for item in data.get("campaigns") or [] if isinstance(item, dict)]
+        self._campaign_stats = data.get("stats") or {}
+        self._open_campaign_window()
+        if not self._campaigns:
+            self.status_var.set(f"攻击链: {CAMPAIGN_EMPTY_TEXT}")
+
+    def _open_campaign_window(self) -> None:
+        """打开攻击链窗口；已打开时刷新并前置（复用同一 Toplevel）。"""
+        if self._campaign_window is not None:
+            try:
+                exists = bool(self._campaign_window.winfo_exists())
+            except tk.TclError:
+                exists = False
+            if exists:
+                self._campaign_window.refresh(self._campaigns)
+                try:
+                    self._campaign_window.deiconify()
+                    self._campaign_window.lift()
+                    self._campaign_window.focus_set()
+                except tk.TclError:
+                    pass
+                return
+            self._campaign_window = None
+        try:
+            self._campaign_window = CampaignsWindow(
+                self,
+                self._campaigns,
+                on_select=self._safe(self._on_campaign_selected),
+            )
+        except Exception as exc:  # noqa: BLE001 - 视图创建失败只弹窗，不崩溃
+            self._campaign_window = None
+            self.status_var.set("攻击链视图打开失败")
+            messagebox.showwarning(
+                "攻击链视图", f"无法打开攻击链视图：{type(exc).__name__}: {exc}", parent=self
+            )
+
+    def _on_campaign_selected(self, campaign: dict[str, Any]) -> None:
+        """攻击链视图选中 campaign：主结果列表多选关联 findings + 状态栏摘要。"""
+        if not isinstance(campaign, dict):
+            return
+        identity_findings: list[dict[str, Any]] = []
+        steps = campaign.get("steps")
+        if isinstance(steps, (list, tuple)):
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                item_findings = step.get("findings")
+                if isinstance(item_findings, (list, tuple)):
+                    identity_findings.extend(
+                        item for item in item_findings if isinstance(item, dict)
+                    )
+        selected = self.results_tree.select_by_findings(identity_findings)
+        if not selected:
+            selected = self.results_tree.select_by_keys(campaign_finding_keys(campaign))
+        if selected:
+            finding = self.results_tree.finding_for_iid(selected[0])
+            if finding is not None:
+                self.detail_panel.show_finding(finding)
+        name = str(campaign.get("name") or campaign.get("chain_id") or "未命名攻击链")
+        label = campaign_confidence_label(campaign.get("confidence"))
+        count = campaign_finding_count(campaign)
+        self.status_var.set(f"攻击链: {name}（{label}，{count} 条 finding）")
+
     # -- 交互 --------------------------------------------------------------
     def _on_select_finding(self, finding: dict[str, Any] | None) -> None:
         self.detail_panel.show_finding(finding)
@@ -1513,6 +2142,7 @@ class App(tk.Tk):
         if self._scanning:
             if not messagebox.askyesno("退出 TamperScan", "扫描仍在进行，确定要退出吗？", parent=self):
                 return
+        self._close_campaign_window()
         if self._poll_job is not None:
             try:
                 self.after_cancel(self._poll_job)

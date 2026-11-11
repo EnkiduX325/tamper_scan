@@ -20,14 +20,30 @@
 - CSV 输出直接捕获（等价于临时 CSV，避免磁盘残留）；UTF-16/UTF-8 自动识别。
 
 ``autorunsc64.exe`` 缺失 → SKIPPED；采集/解析失败 → SKIPPED，绝不中断整体扫描。
+
+信任边界（V1.4 起强制，T1553/T1574 防御）：
+    ``tools/autorunsc64.exe`` 是外部下载的 Sysinternals 二进制，**不能默认信任**：
+    若它被替换或篡改（T1553 破坏信任控制、T1574 劫持执行流），攻击者可以伪造一份
+    "干净"的 ASEP 列表，或借由被劫持的进程污染整轮扫描结论。因此定位到二进制后、
+    执行前必须先经 :func:`verify_autoruns_binary` 强制校验：
+
+    1. Authenticode 状态必须为 ``valid``（独立 WinVerifyTrust，不采信任何外部元数据）；
+    2. 签名者必须为微软（除非 ``rules/autoruns_trust.json`` 显式放宽且同时锁定哈希）；
+    3. 若配置了 ``trusted_sha256`` 白名单，实际 SHA256 必须命中（流式计算，失败不抛异常）。
+
+    任一条件不满足即视为不可信：只产出一条 ``AUTORUNS_UNTRUSTED_BINARY`` SKIPPED
+    Finding（evidence 记录路径、原因、签名状态/签名者、SHA256 与白名单），
+    **绝不调用 subprocess 执行该二进制**，扫描其余模块不受影响。
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import locale
 import os
+import re
 import subprocess
 from typing import Any
 
@@ -39,6 +55,12 @@ CATEGORY = "Autoruns"
 AUTORUNS_EXE_NAME = "autorunsc64.exe"
 COLLECT_TIMEOUT = 60  # 外部命令统一超时（代码质量要求）
 INCLUDE_HASHES = False  # 打开后会在命令里追加 -h（采集时间约 +55s，默认关闭）
+
+# 信任边界：autorunsc64.exe 执行前的强制校验（详见模块 docstring）
+TRUST_CONFIG_PATH = utils.RULES_DIR / "autoruns_trust.json"
+TRUST_RULE_ID = "AUTORUNS_UNTRUSTED_BINARY"
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SHA256_CHUNK = 1024 * 1024
 
 # autoruns 14.x 在 -s 模式下会给 Signer/Company 值加 "(Verified) " 前缀；
 # 未验证时会出现 "(Not verified) (Not Verified) Igor Pavlov" 这种叠加形式。
@@ -74,6 +96,183 @@ def _find_autorunsc() -> str | None:
     if candidate.is_file():
         return str(candidate)
     return None
+
+
+# ---------------------------------------------------------------------------
+# 信任边界：执行前强制校验 autorunsc64.exe
+# ---------------------------------------------------------------------------
+
+
+def _sha256_file(path: str) -> str | None:
+    """流式计算文件 SHA256（1 MiB 分块）；任何 I/O 失败返回 None，不抛异常。"""
+    try:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(_SHA256_CHUNK), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except (OSError, ValueError):
+        return None
+
+
+def _normalize_sha256_values(value: Any) -> list[str]:
+    """把字符串/列表归一为小写 64 位十六进制摘要列表（非法项丢弃，不抛异常）。"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        candidates: list[Any] = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        candidates = list(value)
+    else:
+        return []
+    normalized: list[str] = []
+    for item in candidates:
+        text = "".join(str(item or "").split()).lower()
+        if _SHA256_RE.match(text) and text not in normalized:
+            normalized.append(text)
+    return normalized
+
+
+def load_trust_config() -> dict[str, Any]:
+    """读取 ``rules/autoruns_trust.json``（缺失/损坏时安全回退）。
+
+    默认策略（回退值）：``require_microsoft_signer=True`` 且 ``trusted_sha256`` 为空，
+    即"只要求 Authenticode 有效 + 微软签名"，不按哈希锁定具体发布版本。
+    """
+    config: dict[str, Any] = {"trusted_sha256": [], "require_microsoft_signer": True}
+    try:
+        data = utils.load_json(TRUST_CONFIG_PATH, default=None)
+    except Exception:  # noqa: BLE001 - 配置读取失败必须安全回退，不能阻断扫描
+        data = None
+    if not isinstance(data, dict):
+        return config
+    config["trusted_sha256"] = _normalize_sha256_values(data.get("trusted_sha256"))
+    require_microsoft = data.get("require_microsoft_signer", True)
+    config["require_microsoft_signer"] = require_microsoft if isinstance(require_microsoft, bool) else True
+    return config
+
+
+def verify_autoruns_binary(path: Any, *, expected_sha256: Any = None) -> dict[str, Any]:
+    """执行前的信任校验（纯函数、不抛异常、可 mock ``signature.verify``）。
+
+    判定规则（全部满足才可信）:
+
+    1. 路径存在且可读；
+    2. ``core.signature.verify`` 返回 ``status == "valid"``；
+    3. 签名者为微软（``signature.is_microsoft_signer``）；若配置显式关闭该要求，
+       则必须有 ``trusted_sha256`` 锁定且命中；
+    4. 若配置/入参给出了 SHA256 白名单，实际 SHA256 必须命中。
+
+    Args:
+        path: 待校验的二进制路径。
+        expected_sha256: 可选的期望 SHA256（字符串或列表）；与配置里的
+            ``trusted_sha256`` 合并使用，便于调用方/测试注入。
+
+    Returns:
+        ``{"trusted", "reason", "path", "signature", "signer", "sha256",
+           "sha256_match", "trusted_sha256", "expected_sha256", "error"}``，
+        其中 ``reason`` 取值：``trusted`` / ``empty_path`` / ``missing_file`` /
+        ``unsigned`` / ``invalid_signature`` / ``missing_signer`` /
+        ``non_microsoft_signer`` / ``sha256_mismatch`` / ``verification_error``。
+    """
+    text = str(path or "").strip().strip('"').strip("'")
+    result: dict[str, Any] = {
+        "trusted": False,
+        "reason": "empty_path",
+        "path": text,
+        "signature": {},
+        "signer": None,
+        "sha256": None,
+        "sha256_match": None,
+        "trusted_sha256": [],
+        "expected_sha256": [],
+        "error": None,
+    }
+    if not text:
+        return result
+    try:
+        if not os.path.isfile(text):
+            result["reason"] = "missing_file"
+            return result
+
+        config = load_trust_config()
+        configured_pins = list(config.get("trusted_sha256") or [])
+        pins = list(configured_pins)
+        for value in _normalize_sha256_values(expected_sha256):
+            if value not in pins:
+                pins.append(value)
+        result["trusted_sha256"] = configured_pins
+        result["expected_sha256"] = pins
+
+        result["sha256"] = _sha256_file(text)
+        if pins:
+            result["sha256_match"] = bool(result["sha256"]) and result["sha256"] in pins
+
+        try:
+            raw_signature = signature.verify(text)
+        except Exception as exc:  # noqa: BLE001 - 验签失败一律降级为不可信
+            raw_signature = {"status": "invalid", "signer": None, "error": f"{type(exc).__name__}: {exc}"}
+        signature_info = dict(raw_signature) if isinstance(raw_signature, dict) else {"status": "missing"}
+        status = str(signature_info.get("status") or "missing").strip().lower()
+        signature_info["status"] = status
+        result["signature"] = signature_info
+        signer = str(signature_info.get("signer") or "").strip() or None
+        result["signer"] = signer
+
+        if status == "missing":
+            result["reason"] = "missing_file"
+            return result
+        if status == "unsigned":
+            result["reason"] = "unsigned"
+            return result
+        if status != "valid":
+            result["reason"] = "invalid_signature"
+            return result
+
+        microsoft_signed = signature.is_microsoft_signer(signer)
+        require_microsoft = bool(config.get("require_microsoft_signer", True))
+        if require_microsoft and not microsoft_signed:
+            result["reason"] = "missing_signer" if signer is None else "non_microsoft_signer"
+            return result
+        # 关闭微软签名要求时，必须同时有哈希锁定，否则仍不接受非微软签名
+        if not require_microsoft and not microsoft_signed and not pins:
+            result["reason"] = "non_microsoft_signer"
+            return result
+        if pins and not result["sha256_match"]:
+            result["reason"] = "sha256_mismatch"
+            return result
+    except Exception as exc:  # noqa: BLE001 - 信任校验自身失败也必须安全拒绝执行
+        result["trusted"] = False
+        result["reason"] = "verification_error"
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+    result["trusted"] = True
+    result["reason"] = "trusted"
+    return result
+
+
+def _build_trust_evidence(binary_path: str, trust: dict[str, Any]) -> dict[str, Any]:
+    """构造 ``AUTORUNS_UNTRUSTED_BINARY`` 的结构化证据（摘要字段可截断展示）。"""
+    signature_info = trust.get("signature") or {}
+    pins = list(trust.get("trusted_sha256") or [])
+    actual = trust.get("sha256")
+    evidence: dict[str, Any] = {
+        "binary_path": binary_path,
+        "reason": trust.get("reason"),
+        "signature_status": signature_info.get("status"),
+        "signature": dict(signature_info) if isinstance(signature_info, dict) else {},
+        "signer": trust.get("signer"),
+        "sha256": actual,
+        "sha256_match": trust.get("sha256_match"),
+        "trusted_sha256": pins,
+        "expected_sha256": [truncate(value, 16) for value in pins],
+        "actual_sha256": truncate(actual, 16) if actual else None,
+    }
+    error = signature_info.get("error") if isinstance(signature_info, dict) else None
+    if error or trust.get("error"):
+        evidence["error"] = error or trust.get("error")
+    return evidence
 
 
 def _build_args(exe_path: str, verify_signatures: bool) -> list[str]:
@@ -277,6 +476,21 @@ def scan() -> list[dict[str, Any]]:
                 "缺少 Sysinternals autorunsc64.exe，Autoruns 兜底已跳过",
                 {"expected_path": str(utils.TOOLS_DIR / AUTORUNS_EXE_NAME)},
                 "AUTORUNS_SKIPPED",
+            )
+        ]
+
+    # 信任边界（T1553/T1574）：执行前强制校验，不可信则绝不调用 subprocess
+    trust = verify_autoruns_binary(exe_path)
+    if not trust.get("trusted"):
+        reason = trust.get("reason") or "unknown"
+        return [
+            make_skipped(
+                CATEGORY,
+                AUTORUNS_EXE_NAME,
+                f"autorunsc64.exe 未通过信任校验（{reason}），已拒绝执行，"
+                "以避免被替换/篡改的外部工具污染扫描结论",
+                _build_trust_evidence(exe_path, trust),
+                TRUST_RULE_ID,
             )
         ]
 

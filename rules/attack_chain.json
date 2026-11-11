@@ -1,0 +1,228 @@
+{
+  "_comment": "TamperScan V1.4 攻击链规则库（数据驱动）。tactic_mapping: 规则 ID -> ATT&CK 战术（键支持前缀通配，如 SIG_/WINLOGON_/CREDENTIAL_，精确键优先、最长前缀次之）。chain_templates: 固定完整攻击剧本，只有按模板完整或接近完整覆盖的攻击序列才会成链（绝不自由组合）；steps[].min_findings 为每步所需最少 Finding 数。anti_patterns: 合法多阶段组合反模式，命中直接把 campaign 移入 suppressed（宁可漏报不误报）。correlator 只读本文件，不执行业务逻辑、不改变 Finding/退出码。",
+  "tactic_mapping": {
+    "SIG_": "TA0005",
+    "SIG_UNSIGNED": "TA0005",
+    "SIG_INVALID": "TA0005",
+    "SIG_PATH_MASQUERADE": "TA0005",
+    "SIG_COMPANY_MISMATCH": "TA0005",
+    "CREDENTIAL_": "TA0006",
+    "CRED_": "TA0006",
+    "LSASS_": "TA0006",
+    "MIMIKATZ_": "TA0006",
+    "AUTORUNS_USERWRITABLE": "TA0003",
+    "AUTORUNS_LOLBIN_CMDLINE": "TA0002",
+    "AUTORUNS_DEGRADED": "",
+    "AUTORUNS_FAILED": "",
+    "AUTORUNS_PARSE_ERROR": "",
+    "AUTORUNS_SKIPPED": "",
+    "RUN_USERWRITABLE": "TA0003",
+    "RUN_MASQUERADE": "TA0003",
+    "RUN_LOLBIN": "TA0002",
+    "RUN_ACCESS_DENIED": "",
+    "POLICY_HIJACK": "TA0005",
+    "DEFENDER_EXCLUSION": "TA0005",
+    "POLICY_ACCESS_DENIED": "",
+    "BROWSE_HTTP_SHELL_HIJACK": "TA0005",
+    "BROWSE_NAVIGATION_PORTAL": "TA0005",
+    "PROXY_HIJACK": "TA0005",
+    "BROWSE_ACCESS_DENIED": "",
+    "LNK_HIJACK": "TA0003",
+    "LNK_ACCESS_DENIED": "",
+    "LNK_SKIPPED": "",
+    "TASK_HIDDEN_TARRASK": "TA0003",
+    "TASK_HIDDEN_PARTIAL": "",
+    "TASK_HIDDEN_ACCESS_DENIED": "",
+    "TASK_HIDDEN_SKIPPED": "",
+    "TASK_SUSPICIOUS": "TA0003",
+    "TASK_USERWRITABLE": "TA0003",
+    "TASK_MASQUERADE": "TA0003",
+    "TASK_INTERPRETER": "TA0002",
+    "TASK_PARSE_ERROR": "",
+    "TASK_SKIPPED": "",
+    "WFP_EDR_SILENCER": "TA0005",
+    "WFP_BLOCK_FILTER": "TA0005",
+    "WFP_BLOCK_PUBLIC_IP": "TA0005",
+    "WFP_BLOCK_REMOTE_PORT": "TA0005",
+    "WFP_FILTER_UNPARSED": "",
+    "WFP_ACCESS_DENIED": "",
+    "WFP_PARTIAL": "",
+    "WFP_SKIPPED": "",
+    "RDP_SERVICEDLL_TAMPER": "TA0003",
+    "RDP_SERVICEDLL_ABSENT": "TA0003",
+    "NP_PROVIDER_TAMPER": "TA0003",
+    "NP_UNKNOWN_PROVIDER": "TA0003",
+    "NP_ORDER_MISMATCH": "TA0003",
+    "NP_ORDER_ABSENT": "TA0003",
+    "NP_ACCESS_DENIED": "",
+    "NP_SKIPPED": "",
+    "RDP_ACCESS_DENIED": "",
+    "RDP_SKIPPED": "",
+    "SVC_SERVICEDLL_TAMPER": "TA0003",
+    "SVC_SERVICEDLL_ABSENT": "TA0003",
+    "SERVICE_SVCHOST_DLL": "TA0003",
+    "SERVICE_SVCHOST_DLL_OUTSIDE": "TA0003",
+    "SERVICE_USERWRITABLE": "TA0003",
+    "SERVICE_NAME_MISMATCH": "TA0005",
+    "SERVICE_PARSE_ERROR": "",
+    "SERVICE_SKIPPED": "",
+    "SVC_UNQUOTED_PATH": "TA0004",
+    "SVC_UNQUOTED_PARTIAL": "",
+    "SVC_UNQUOTED_PARSE_ERROR": "",
+    "SVC_UNQUOTED_SKIPPED": "",
+    "WMI_PERSIST": "TA0003",
+    "WMI_SUBSCRIPTION": "TA0003",
+    "WMI_ACCESS_DENIED": "",
+    "WMI_ACCESS_DENIED_PARTIAL": "",
+    "WMI_SKIPPED": "",
+    "HOSTS_HIJACK": "TA0005",
+    "DNS_ANOMALY": "TA0005",
+    "NETWORK_ACCESS_DENIED": "",
+    "BITS_PERSIST": "TA0003",
+    "BITS_ACCESS_DENIED": "",
+    "BITS_SKIPPED": "",
+    "PS_PROFILE_SUSPICIOUS": "TA0003",
+    "PS_PROFILE_ACCESS_DENIED": "",
+    "COM_HIJACK": "TA0003",
+    "COM_HIJACK_LOW": "TA0003",
+    "LSA_AUTH_PACKAGE_TAMPER": "TA0003",
+    "LSA_PACKAGE_HIJACK": "TA0003",
+    "LSA_APPINIT": "TA0003",
+    "LSA_APPINIT_INACTIVE": "TA0003",
+    "LSA_ACCESS_DENIED": "",
+    "IFEO_DEBUGGER": "TA0003",
+    "IFEO_DEBUGGER_LEGIT": "",
+    "WINLOGON_": "TA0003",
+    "WINLOGON_TAMPER": "TA0003",
+    "WINLOGON_SHELL_TAMPER": "TA0003",
+    "WINLOGON_USERINIT_TAMPER": "TA0003",
+    "WINLOGON_TASKMAN_TAMPER": "TA0003",
+    "WINLOGON_APPSETUP_TAMPER": "TA0003",
+    "WINLOGON_NOTIFY_TAMPER": "TA0004",
+    "WINLOGON_GINADLL_TAMPER": "TA0004",
+    "WINLOGON_ACCESS_DENIED": "",
+    "NETSH_HELPER_TAMPER": "TA0003",
+    "TIMEPROVIDER_DLL_TAMPER": "TA0003",
+    "PRINT_PROCESSOR_TAMPER": "TA0003",
+    "PRINT_MONITOR_TAMPER": "TA0003",
+    "ACTIVE_SETUP_STUB": "TA0003",
+    "APPCOMPAT_SHIM": "TA0003",
+    "SILENTPROCESS_EXIT_TAMPER": "TA0003",
+    "WER_LOCALDUMPS_TAMPER": "TA0003",
+    "CMD_AUTORUN": "TA0003",
+    "SCRNSAVER_TAMPER": "TA0003",
+    "PERSISTENCE_EXT_ACCESS_DENIED": "",
+    "PERSISTENCE_EXT_SKIPPED": "",
+    "EXT_CRX_MISMATCH": "TA0005",
+    "EXT_UNPACKED": "TA0003",
+    "EXT_INCONSISTENT": "TA0005",
+    "EXT_VERSION_MISMATCH": "TA0005",
+    "LOLBIN_CMDLINE": "TA0002",
+    "PROCESS_LOLBIN_NAME": "TA0002",
+    "PROCESS_MASQUERADE": "TA0005",
+    "PARENT_ANOMALY": "TA0005",
+    "MEM_YARA_HIT": "TA0005",
+    "YARA_FILE_HIT": "TA0002",
+    "MEMORY_ACCESS_DENIED": "",
+    "MEMORY_SCAN_ERROR": "",
+    "MEMORY_SKIPPED": "",
+    "MEMORY_TIME_BUDGET": "",
+    "AUTOADMINLOGON_PLAINTEXT": "TA0006"
+  },
+  "chain_templates": [
+    {
+      "id": "hidden_task_wfp_credential_backdoor",
+      "name": "隐藏计划任务 → WFP 阻断 → 凭证后门",
+      "description": "Tarrask 隐藏计划任务提供持久化，EDR Silencer 通过 WFP 过滤器静默阻断安全软件通信，随后 RDP/Network Provider 后门窃取凭证：持久化→防御规避→凭证访问的完整攻击序列。",
+      "confidence": "high",
+      "max_gap_hours": 24,
+      "steps": [
+        {
+          "tactic": "TA0003",
+          "rule_ids": ["TASK_HIDDEN_TARRASK", "TASK_HIDDEN_PARTIAL", "TASK_SUSPICIOUS"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0005",
+          "rule_ids": ["WFP_EDR_SILENCER", "WFP_BLOCK_FILTER", "WFP_BLOCK_PUBLIC_IP", "WFP_BLOCK_REMOTE_PORT"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0006",
+          "rule_ids": ["RDP_SERVICEDLL_TAMPER", "NP_PROVIDER_TAMPER", "NP_UNKNOWN_PROVIDER"],
+          "min_findings": 1
+        }
+      ]
+    },
+    {
+      "id": "autostart_signature_service_hijack",
+      "name": "启动项持久化 → 签名异常 → 服务/DLL 劫持",
+      "description": "Run/Startup/Autoruns 启动项指向用户可写或伪装路径，释放的可执行文件无签名/签名无效，并通过系统服务 ServiceDll 或未加引号服务路径完成持久化与提权。",
+      "confidence": "high",
+      "max_gap_hours": 24,
+      "steps": [
+        {
+          "tactic": "TA0003",
+          "rule_ids": ["RUN_USERWRITABLE", "RUN_MASQUERADE", "AUTORUNS_USERWRITABLE", "AUTORUNS_LOLBIN_CMDLINE", "LNK_HIJACK"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0005",
+          "rule_ids": ["SIG_UNSIGNED", "SIG_INVALID", "SIG_PATH_MASQUERADE"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0003",
+          "rule_ids": ["SVC_SERVICEDLL_TAMPER", "SERVICE_SVCHOST_DLL_OUTSIDE", "SERVICE_USERWRITABLE", "SVC_UNQUOTED_PATH"],
+          "min_findings": 1
+        }
+      ]
+    },
+    {
+      "id": "winlogon_lsa_defense_suppression",
+      "name": "Winlogon/LSA 篡改 → 开箱即用提权 → 防御抑制",
+      "description": "Winlogon Shell/Userinit/Notify 或 LSA 认证包被替换以获得登录时执行与提权，同时用 WFP 过滤器/Defender 排除项/策略键压制安全软件：登录持久化→提权→防御规避的完整序列。",
+      "confidence": "high",
+      "max_gap_hours": 24,
+      "steps": [
+        {
+          "tactic": "TA0003",
+          "rule_ids": ["LSA_AUTH_PACKAGE_TAMPER", "LSA_PACKAGE_HIJACK", "LSA_APPINIT", "WINLOGON_TAMPER", "WINLOGON_SHELL_TAMPER", "WINLOGON_USERINIT_TAMPER"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0004",
+          "rule_ids": ["WINLOGON_NOTIFY_TAMPER", "WINLOGON_GINADLL_TAMPER", "WINLOGON_APPSETUP_TAMPER", "SVC_UNQUOTED_PATH"],
+          "min_findings": 1
+        },
+        {
+          "tactic": "TA0005",
+          "rule_ids": ["WFP_EDR_SILENCER", "WFP_BLOCK_FILTER", "DEFENDER_EXCLUSION", "POLICY_HIJACK"],
+          "min_findings": 1
+        }
+      ]
+    }
+  ],
+  "anti_patterns": [
+    {
+      "id": "enterprise_updater_noise",
+      "description": "企业更新器/安装器的合法多阶段组合：未签名安装包（SIG_UNSIGNED）+ WER LocalDumps 崩溃转储目录 + Active Setup 登录刷新，属正常部署与排障行为，不作为攻击链。",
+      "match": {
+        "rule_ids": ["SIG_UNSIGNED", "WER_LOCALDUMPS_TAMPER", "ACTIVE_SETUP_STUB"],
+        "tactics": [],
+        "require_all": true,
+        "target_contains": []
+      }
+    },
+    {
+      "id": "managed_it_policy_extension",
+      "description": "托管 IT 策略下的合规配置：策略键被管理端写入（POLICY_HIJACK/DEFENDER_EXCLUSION）与浏览器扩展目录被解包（EXT_UNPACKED），目标路径位于策略键或受管目录，不作为攻击链。",
+      "match": {
+        "rule_ids": ["POLICY_HIJACK", "DEFENDER_EXCLUSION", "EXT_UNPACKED"],
+        "tactics": ["TA0005"],
+        "require_all": false,
+        "target_contains": ["\\policies\\", "\\software\\policies"]
+      }
+    }
+  ]
+}

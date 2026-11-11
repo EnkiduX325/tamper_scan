@@ -1,0 +1,5 @@
+{
+  "_comment": "autorunsc64.exe 信任边界配置（V1.4）。执行前强制校验：Authenticode 必须 valid 且签名者包含 Microsoft。trusted_sha256 为空表示不锁定具体发布版本；填入官方 Sysinternals autorunsc64.exe 的小写 SHA256（64 位十六进制）可进一步固定到已验证版本，不匹配则拒绝执行。require_microsoft_signer=false 仅在同时配置非空 trusted_sha256 时生效（无哈希锁定时仍拒绝非微软签名）。配置缺失/损坏时按 require_microsoft_signer=true、无哈希白名单安全回退。",
+  "trusted_sha256": [],
+  "require_microsoft_signer": true
+}
