@@ -31,6 +31,7 @@ from core.finding import (
     SEVERITIES,
     dedupe_findings,
     exit_code_for,
+    rule_basename,
     severity_counts,
     sort_findings,
 )
@@ -50,6 +51,29 @@ SEVERITY_LABELS = {
     "INFO": "信息",
     "SKIPPED": "跳过",
 }
+
+# ---------------------------------------------------------------------------
+# 只读修复建议（remediation）
+# ---------------------------------------------------------------------------
+# 设计约束：``rules/remediation.json`` 里的 ``command`` 只是「给用户手动复制执行」
+# 的建议文本，本模块只负责加载/匹配/渲染，**绝不执行任何命令**（无 subprocess /
+# os.system / os.popen）。所有 finding 均原样保留，仅追加 ``remediation`` 字段。
+
+REMEDIATION_FIELDS: tuple[str, ...] = (
+    "summary",
+    "expected",
+    "actual",
+    "command",
+    "risk",
+    "requires_admin",
+)
+REMEDIATION_RISK_LEVELS: tuple[str, ...] = ("LOW", "MEDIUM", "HIGH")
+
+#: 修复建议规则库路径（与 rules/whitelist.json 同目录，兼容 PyInstaller 解包目录）
+REMEDIATION_PATH: Path = utils.RULES_DIR / "remediation.json"
+
+# 进程内缓存：{路径字符串: {rule_id: 标准化 remediation dict}}
+_REMEDIATION_CACHE: dict[str, dict[str, dict[str, Any]]] = {}
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -111,6 +135,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .detail { margin: 4px 14px 0; }
   .evidence { margin: 8px 14px 12px; padding: 10px; background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; }
   pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 0; }
+  .remediation { margin: 0 14px 12px; padding: 10px 12px; background: #f0f7ff; border: 1px solid #b6d4f0; border-left: 4px solid var(--info); border-radius: 6px; }
+  .remediation-title { margin: 0 0 6px; font-size: 13px; color: var(--info); }
+  .remediation-meta { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 13px; }
+  .remediation-meta div { display: contents; }
+  .remediation-meta dt { color: var(--muted); }
+  .remediation-meta dd { margin: 0; word-break: break-all; }
+  .remediation-risk { font-weight: 600; }
+  .remediation-risk.risk-HIGH { color: var(--high); }
+  .remediation-risk.risk-MEDIUM { color: var(--medium); }
+  .remediation-risk.risk-LOW { color: var(--low); }
+  .remediation-hint { color: var(--muted); font-size: 11px; margin: 8px 0 4px; }
+  .remediation-command { background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
   .empty { color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 24px; }
 </style>
@@ -181,6 +217,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       </summary>
       <p class="detail">{{ finding.detail }}</p>
       <pre class="evidence">{{ finding.evidence_json }}</pre>
+      {% if finding.remediation %}
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+          {% if finding.remediation.summary %}<div><dt>建议</dt><dd>{{ finding.remediation.summary }}</dd></div>{% endif %}
+          {% if finding.remediation.expected %}<div><dt>建议值</dt><dd>{{ finding.remediation.expected }}</dd></div>{% endif %}
+          {% if finding.remediation.actual %}<div><dt>当前值</dt><dd>{{ finding.remediation.actual }}</dd></div>{% endif %}
+          <div><dt>风险等级</dt><dd class="remediation-risk risk-{{ finding.remediation.risk }}">{{ finding.remediation.risk }}</dd></div>
+          <div><dt>需要管理员</dt><dd>{{ "是" if finding.remediation.requires_admin else "否" }}</dd></div>
+        </dl>
+        {% if finding.remediation.command %}
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">{{ finding.remediation.command }}</pre>
+        {% endif %}
+      </section>
+      {% endif %}
     </details>
     {% endfor %}
   </section>
@@ -211,6 +263,141 @@ def _host_info() -> dict[str, Any]:
     }
 
 
+def _normalize_remediation(raw: Any) -> dict[str, Any] | None:
+    """把单条 remediation 规范化为固定字段 dict；非 dict 返回 ``None``（丢弃）。"""
+    if not isinstance(raw, dict):
+        return None
+    risk = str(raw.get("risk") or "").strip().upper()
+    if risk not in REMEDIATION_RISK_LEVELS:
+        risk = "MEDIUM"
+    return {
+        "summary": str(raw.get("summary") or "").strip(),
+        "expected": str(raw.get("expected") or "").strip(),
+        "actual": str(raw.get("actual") or "").strip(),
+        "command": str(raw.get("command") or "").strip(),
+        "risk": risk,
+        "requires_admin": bool(raw.get("requires_admin", False)),
+    }
+
+
+def _extract_remediation_rules(data: Any) -> dict[str, dict[str, Any]]:
+    """兼容 ``{"rules": {...}}`` 与 ``{rule_id: {...}}`` 两种结构，丢弃非 dict 项。"""
+    if not isinstance(data, dict):
+        return {}
+    wrapped = data.get("rules")
+    if isinstance(wrapped, dict):
+        source: dict[Any, Any] = wrapped
+    else:
+        source = {key: value for key, value in data.items() if not str(key).startswith("_")}
+    rules: dict[str, dict[str, Any]] = {}
+    for rule_id, raw in source.items():
+        key = str(rule_id or "").strip()
+        item = _normalize_remediation(raw)
+        if not key or item is None:
+            continue
+        rules[key] = item
+    return rules
+
+
+def clear_remediation_cache() -> None:
+    """清空 remediation 进程内缓存（测试或热更新 ``rules/remediation.json`` 后使用）。"""
+    _REMEDIATION_CACHE.clear()
+
+
+def load_remediation(path: str | os.PathLike[str] | None = None) -> dict[str, dict[str, Any]]:
+    """读取修复建议规则库，返回 ``{rule_id: remediation}``。
+
+    - ``path`` 为 ``None`` 时读取 :data:`REMEDIATION_PATH`；
+    - 文件缺失 / JSON 损坏 / 结构非法时返回空 dict，**不抛异常**；
+    - 带进程内缓存（按路径区分），:func:`clear_remediation_cache` 可刷新；
+    - 返回的是缓存条目的浅拷贝，调用方修改返回值不会污染缓存。
+    """
+    try:
+        target = Path(path) if path is not None else REMEDIATION_PATH
+    except (TypeError, ValueError):  # pragma: no cover - 非法 path 类型兜底
+        return {}
+    cache_key = str(target)
+    cached = _REMEDIATION_CACHE.get(cache_key)
+    if cached is None:
+        cached = _extract_remediation_rules(utils.load_json(target, default=None))
+        _REMEDIATION_CACHE[cache_key] = cached
+    return {rule_id: dict(item) for rule_id, item in cached.items()}
+
+
+def _finding_rule_candidates(finding: dict[str, Any]) -> tuple[str, list[str]]:
+    """返回 ``(rule_id, merged_rules)``，merged_rules 已转成去空字符串列表。"""
+    rule_id = str(finding.get("rule_id") or "").strip()
+    evidence = finding.get("evidence")
+    merged = evidence.get("merged_rules") if isinstance(evidence, dict) else None
+    if isinstance(merged, (list, tuple)):
+        merged_rules = [str(item).strip() for item in merged if str(item or "").strip()]
+    else:
+        merged_rules = []
+    return rule_id, merged_rules
+
+
+def _match_remediation(
+    finding: dict[str, Any],
+    exact_index: dict[str, dict[str, Any]],
+    basename_index: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """按「精确 rule_id > merged_rules 精确 > 规则基名」的优先级匹配 remediation。"""
+    rule_id, merged_rules = _finding_rule_candidates(finding)
+    if rule_id and rule_id in exact_index:
+        return exact_index[rule_id]
+    for candidate in merged_rules:
+        if candidate in exact_index:
+            return exact_index[candidate]
+    for candidate in [rule_id, *merged_rules]:
+        if not candidate:
+            continue
+        hit = basename_index.get(rule_basename(candidate))
+        if hit is not None:
+            return hit
+    return None
+
+
+def apply_remediation(
+    findings: Iterable[dict[str, Any]],
+    remediations: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """给命中规则的 Finding 追加 ``remediation`` 字段，返回新列表。
+
+    - 匹配顺序：``finding["rule_id"]`` 精确 → ``evidence["merged_rules"]`` 精确 →
+      ``core.finding.rule_basename`` 基名兜底（如 ``AUTORUNS_SIG_UNSIGNED`` → ``SIG_UNSIGNED``）；
+    - 命中后写入标准化 ``remediation`` dict（summary/expected/actual/command/risk/requires_admin）；
+    - **不修改入参**（每条 finding / remediation 都做浅拷贝）；
+    - ``remediations=None`` 时自动加载真实 ``rules/remediation.json``；
+    - 纯只读：不执行、不写回任何命令。
+    """
+    if remediations is None:
+        remediations = load_remediation()
+    exact_index: dict[str, dict[str, Any]] = {}
+    for rule_id, raw in (remediations or {}).items():
+        key = str(rule_id or "").strip()
+        item = _normalize_remediation(raw)
+        if not key or item is None:
+            continue
+        exact_index[key] = item
+    # 基名索引：优先使用「本身就是基名」的 key（如 SIG_UNSIGNED 优先于 AUTORUNS_SIG_UNSIGNED）
+    basename_index: dict[str, dict[str, Any]] = {}
+    for rule_id, item in exact_index.items():
+        base = rule_basename(rule_id)
+        if not base:
+            continue
+        if base not in basename_index or rule_id == base:
+            basename_index[base] = item
+
+    annotated: list[dict[str, Any]] = []
+    for finding in findings or []:
+        entry = dict(finding)
+        match = _match_remediation(entry, exact_index, basename_index)
+        if match is not None:
+            entry["remediation"] = dict(match)
+        annotated.append(entry)
+    return annotated
+
+
 def build_report(
     findings: Iterable[dict[str, Any]],
     *,
@@ -221,6 +408,8 @@ def build_report(
 ) -> dict[str, Any]:
     """规范化 Findings 并组装报告 dict（去重/排序复用 core.finding）。"""
     normalized = sort_findings(dedupe_findings(findings, merge_rule_base=True))
+    # 去重排序后挂载只读修复建议（幂等；纯数据操作，不执行任何命令）
+    normalized = apply_remediation(normalized)
     counts = severity_counts(normalized)
     module_list = modules or []
     available = sum(1 for item in module_list if item.get("status") == "ok")
@@ -279,6 +468,37 @@ def render_html(report: dict[str, Any]) -> str:
     return _render_html_fallback(report)
 
 
+def _fallback_remediation_html(finding: dict[str, Any]) -> str:
+    """兜底渲染里的「建议处理」区块；所有动态字段一律 html.escape。"""
+    escape = html_module.escape
+    remediation = finding.get("remediation")
+    if not isinstance(remediation, dict) or not remediation:
+        return ""
+    rows: list[str] = []
+    for label, key in (("建议", "summary"), ("建议值", "expected"), ("当前值", "actual")):
+        value = remediation.get(key)
+        if value:
+            rows.append(f"<div><dt>{escape(label)}</dt><dd>{escape(str(value))}</dd></div>")
+    risk = str(remediation.get("risk") or "")
+    rows.append(
+        f"<div><dt>风险等级</dt><dd class=\"remediation-risk risk-{escape(risk)}\">{escape(risk)}</dd></div>"
+    )
+    rows.append(
+        f"<div><dt>需要管理员</dt><dd>{'是' if remediation.get('requires_admin') else '否'}</dd></div>"
+    )
+    command = remediation.get("command")
+    command_html = ""
+    if command:
+        command_html = (
+            '<p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>'
+            f'<pre class="remediation-command">{escape(str(command))}</pre>'
+        )
+    return (
+        '<section class="remediation"><h3 class="remediation-title">建议处理</h3>'
+        f"<dl class=\"remediation-meta\">{''.join(rows)}</dl>{command_html}</section>"
+    )
+
+
 def _render_html_fallback(report: dict[str, Any]) -> str:
     """jinja2 缺失时的最小兜底渲染：所有动态内容一律 html.escape。"""
     escape = html_module.escape
@@ -291,7 +511,7 @@ def _render_html_fallback(report: dict[str, Any]) -> str:
             f"<summary><b>{escape(str(finding.get('severity')))}</b> "
             f"{escape(str(finding.get('rule_id')))} — {escape(str(finding.get('target')))}</summary>"
             f"<p>{escape(str(finding.get('detail')))}</p>"
-            f"<pre>{escape(evidence)}</pre></details>"
+            f"<pre>{escape(evidence)}</pre>{_fallback_remediation_html(finding)}</details>"
         )
     counts_html = " ".join(f"<b>{escape(name)}</b>: {counts.get(name, 0)}" for name in SEVERITIES)
     return (
@@ -299,7 +519,12 @@ def _render_html_fallback(report: dict[str, Any]) -> str:
         f"<title>TamperScan {escape(str(report.get('generated_at')))}</title>"
         "<style>body{font-family:'Segoe UI','Microsoft YaHei',Arial,sans-serif;padding:20px;}"
         "pre{white-space:pre-wrap;font-size:12px;background:#f6f8fa;padding:8px;}"
-        "details{margin:8px 0;border:1px solid #d0d7de;border-radius:6px;padding:6px;}</style>"
+        "details{margin:8px 0;border:1px solid #d0d7de;border-radius:6px;padding:6px;}"
+        ".remediation{margin:8px 0;padding:8px;background:#f0f7ff;border:1px solid #b6d4f0;border-radius:6px;}"
+        ".remediation-meta{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0;}"
+        ".remediation-meta div{display:contents;}"
+        ".remediation-command{background:#fff;border:1px solid #d0d7de;}"
+        ".remediation-hint{color:#57606a;font-size:11px;margin:6px 0 4px;}</style>"
         "</head><body><h1>TamperScan 扫描报告</h1>"
         f"<p>生成时间：{escape(str(report.get('generated_at')))}｜主机：{escape(str(report.get('host', {}).get('name')))}｜版本：{escape(str(report.get('version')))}</p>"
         f"<p>统计：{counts_html}｜合计：{counts and report.get('summary', {}).get('total')}｜退出码：{report.get('summary', {}).get('exit_code')}</p>"

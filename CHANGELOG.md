@@ -12,6 +12,58 @@
 - 模块 2 后续增强：IPv6 远端地址（`FWP_BYTE_ARRAY16` 指针）解析与 NDR 布局跨版本兼容；
 - 模块 3 后续增强：RDP 配置类后门（`fDenyTSConnections` / 端口 / 影子会话等）。
 
+## [1.2.0] - 2026-11-11
+
+V1.2「冷门持久化与只读修复建议」：模块总数增至 **20**（新增 `persistence_ext`），扩展
+`lsa_appinit` 的 Winlogon 检测与 `service` 的 ServiceDll 校验，新增只读修复建议机制；
+协议由 MIT 变更为 **CC BY-NC 4.0**（严禁未授权商用）；单元测试 **312** 条。
+
+### Added
+
+- **新增模块 `persistence_ext`（阶段 8，第 20 个模块）**：覆盖 10 个冷门持久化扩展点 ——
+  Netsh Helper DLL（`NETSH_HELPER_TAMPER`）、W32Time TimeProvider（`TIMEPROVIDER_DLL_TAMPER`）、
+  Print Processor / Monitor（`PRINT_PROCESSOR_TAMPER` / `PRINT_MONITOR_TAMPER`）、
+  Active Setup StubPath（`ACTIVE_SETUP_STUB`）、AppCompat 自定义 Shim（`APPCOMPAT_SHIM`）、
+  SilentProcessExit MonitorProcess（`SILENTPROCESS_EXIT_TAMPER`）、
+  WER LocalDumps（`WER_LOCALDUMPS_TAMPER`）、CMD AutoRun（`CMD_AUTORUN`）、
+  屏幕保护程序（`SCRNSAVER_TAMPER`）；采集失败按统一契约降级为 `SKIPPED`。
+- **`lsa_appinit` 增加 Winlogon / 自动登录检测（8 条规则）**：
+  `WINLOGON_SHELL_TAMPER`、`WINLOGON_USERINIT_TAMPER`、`WINLOGON_GINADLL_TAMPER`、
+  `WINLOGON_APPSETUP_TAMPER`、`WINLOGON_TASKMAN_TAMPER`、`WINLOGON_NOTIFY_TAMPER`、
+  `AUTOADMINLOGON_PLAINTEXT`、`LSA_AUTH_PACKAGE_TAMPER`。
+- **只读修复建议机制**：新增 `rules/remediation.json`（按 `rule_id` 索引的 `summary` / `expected` / `actual` / `command` / `risk` / `requires_admin`），
+  `reporter` 为命中的 Finding 挂载 `remediation` 字段并在 HTML 报告渲染「建议处理」区块，
+  GUI 详情面板展示建议并支持一键复制命令；**扫描器绝不执行任何命令**。
+- `tools/verify_v12.ps1`（由 `tools/verify_v11.ps1` 更名）新增 LICENSE / README 协议断言。
+
+### Changed
+
+- 版本号升级为 `1.2.0`（`core/version.py` 唯一来源）；模块总数 19 → 20，`--list-modules`、
+  JSON 报告 `modules_total` / `modules_available`、样例报告与 CI / verify 断言同步更新。
+- `service` 泛化 `ServiceDll` 校验：文件缺失 → `SVC_SERVICEDLL_ABSENT`；
+  系统目录外且签名非有效微软签名 → `SVC_SERVICEDLL_TAMPER`；
+  与 `credential_rdp` 的 `RDP_SERVICEDLL_TAMPER` / `RDP_SERVICEDLL_ABSENT` 自动去重合并。
+- README 更新 V1.2 说明、§9.2 规则清单（Winlogon 8 条 / persistence_ext 10 条 / ServiceDll 2 条）、
+  第 20 个模块与 20 模块完整清单、修复建议（只读）机制说明；`--collect-submodules`、
+  打包/测试局限、目录结构等处的模块数描述统一为 20。
+- 单元测试扩展至 **312 条**（V1.2 起），CI 继续执行 `python -m pytest -q`。
+
+### Removed
+
+- 移除 README 顶部的 MIT 徽章与 MIT 授权声明，替换为 CC BY-NC 4.0 提示行与 §11 许可协议章节。
+- 删除旧的 `tools/verify_v11.ps1`（内容并入 `tools/verify_v12.ps1`）。
+- `service` 与 `credential_rdp` 对同一服务 `ServiceDll` 目标的重复上报改为自动去重合并。
+
+### Security
+
+- **协议变更（重要）**：本项目自 V1.2 起采用 **CC BY-NC 4.0**（知识共享 署名-非商业性使用
+  4.0 国际许可协议），替代原 MIT 协议；**严禁未经授权的商业用途**，完整文本见 `LICENSE`，
+  协议说明见 README §11 与 <https://creativecommons.org/licenses/by-nc/4.0/>。
+- 只读修复建议全程仅展示 / 复制文本：扫描器、报告生成与 GUI 均不执行 `remediation.command`，
+  也不做 shell 拼接执行，避免把“建议”变成自动处置风险。
+- `persistence_ext` / Winlogon / ServiceDll 检测均遵循统一降级策略：权限不足或结构异常显式
+  上报 `SKIPPED`，不误判为安全。
+
 ## [1.1.0] - 2026-11-10
 
 V1.1「高级威胁检测」：在 1.0.0 的 15 个模块基础上新增 **4 个红队维度检测模块**（计划任务隐藏、

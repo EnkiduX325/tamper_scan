@@ -603,6 +603,9 @@ DEFAULT_WHITELIST: dict[str, Any] = {
     "services": [],
     "tasks": [],
     "masquerade_allow": [],
+    # 冷门持久化扩展点结构化豁免（modules/persistence_ext.py）：
+    # 每项 {"registry_value_path": "...", "signer_contains": "...", "note": "..."}
+    "persistence_ext_allow": [],
 }
 
 _WHITELIST_LIST_KEYS = ("paths", "commandline_patterns", "signers", "domains", "services", "tasks")
@@ -637,6 +640,13 @@ def load_whitelist(path: str | os.PathLike[str] | None = None) -> dict[str, Any]
     merged["masquerade_allow"] = (
         [item for item in raw_masquerade if isinstance(item, dict)]
         if isinstance(raw_masquerade, list)
+        else []
+    )
+    # persistence_ext_allow 是 dict 列表（不是字符串列表），单独归一化：非 dict 项丢弃
+    raw_persistence_ext = merged.get("persistence_ext_allow")
+    merged["persistence_ext_allow"] = (
+        [item for item in raw_persistence_ext if isinstance(item, dict)]
+        if isinstance(raw_persistence_ext, list)
         else []
     )
     merged["_source"] = str(target)
@@ -736,6 +746,52 @@ def _match_masquerade_allow(finding: dict[str, Any], config: dict[str, Any]) -> 
     return None
 
 
+def _norm_registry_value_path(value: Any) -> str:
+    """规范化注册表值展示路径：``normalize_path`` + 去首尾空白 + 小写。"""
+    return str(normalize_path(value) or "").strip().lower()
+
+
+def _match_persistence_ext_allow(finding: dict[str, Any], config: dict[str, Any]) -> dict[str, str] | None:
+    """冷门持久化扩展点结构化豁免（modules/persistence_ext.py）。
+
+    命中条件（必须同时满足）：
+
+    1. ``finding.evidence["registry_value_path"]`` 归一化后与条目
+       ``registry_value_path`` **精确相等**（大小写不敏感）；
+    2. ``finding.evidence`` 的签名者（``signature.signer``，兼容顶层 ``signer``）
+       非空，且条目 ``signer_contains`` 非空并为其大小写不敏感子串。
+
+    路径不匹配或签名不匹配时不豁免（保持原等级，交给人工判断）。
+    """
+    entries = config.get("persistence_ext_allow")
+    if not isinstance(entries, list) or not entries:
+        return None
+    evidence = finding.get("evidence") or {}
+    value_path = _norm_registry_value_path(evidence.get("registry_value_path"))
+    if not value_path:
+        return None
+    signature_info = evidence.get("signature") if isinstance(evidence.get("signature"), dict) else {}
+    signer = str(signature_info.get("signer") or evidence.get("signer") or "").strip()
+    if not signer:
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_path = _norm_registry_value_path(entry.get("registry_value_path"))
+        signer_needle = str(entry.get("signer_contains") or "").strip()
+        if not entry_path or not signer_needle:
+            continue
+        if entry_path != value_path:
+            continue
+        if signer_needle.lower() not in signer.lower():
+            continue
+        return {
+            "type": "persistence_ext_allow",
+            "value": f"{value_path}（signer 含 {signer_needle}）",
+        }
+    return None
+
+
 def match_whitelist(finding: dict[str, Any], whitelist: dict[str, Any] | None = None) -> dict[str, str] | None:
     """判断 Finding 是否命中白名单，返回命中详情（type/value）或 None。"""
     config = whitelist if whitelist is not None else load_whitelist()
@@ -761,6 +817,11 @@ def match_whitelist(finding: dict[str, Any], whitelist: dict[str, Any] | None = 
     masquerade_match = _match_masquerade_allow(finding, config)
     if masquerade_match:
         return masquerade_match
+
+    # 1.6) 冷门持久化扩展点结构化豁免（注册表值路径精确 + 签名者子串）
+    persistence_ext_match = _match_persistence_ext_allow(finding, config)
+    if persistence_ext_match:
+        return persistence_ext_match
 
     # 2) 签名者/公司白名单（大小写不敏感子串）
     for entry in config.get("signers", []):

@@ -21,7 +21,8 @@ from typing import Any, Callable
 from .finding import dedupe_findings, make_skipped, sort_findings
 from .utils import apply_whitelist, load_whitelist
 
-# (模块名, 中文说明, 计划接入阶段) —— 保持 15 个既有模块顺序，V1.1 新模块追加在对应位置
+# (模块名, 中文说明, 计划接入阶段) —— 保持既有模块顺序，V1.1/V1.2 新模块追加在对应位置
+# V1.2 起共 20 个模块（新增 persistence_ext，阶段 8）
 MODULE_REGISTRY: tuple[tuple[str, str, int], ...] = (
     ("autoruns", "Autoruns 广度兜底（autorunsc64.exe）", 2),
     ("registry_run", "注册表 Run/RunOnce（64/32 位）", 3),
@@ -39,7 +40,8 @@ MODULE_REGISTRY: tuple[tuple[str, str, int], ...] = (
     ("bits", "BITS 作业", 4),
     ("powershell_profile", "PowerShell Profile", 4),
     ("com_hijack", "COM 劫持（InprocServer32）", 4),
-    ("lsa_appinit", "LSA / AppInit / IFEO", 4),
+    ("lsa_appinit", "LSA / AppInit / IFEO / Winlogon", 4),
+    ("persistence_ext", "冷门持久化扩展点（Netsh/TimeProvider/Print 等）", 8),
     ("browser_ext", "浏览器扩展深度检测", 5),
     ("lolbin_process", "LOLBin 进程与内存扫描", 6),
 )

@@ -1,7 +1,7 @@
 {
   "tool": "TamperScan",
-  "version": "1.1.0",
-  "generated_at": "2026-11-10T14:49:40+00:00",
+  "version": "1.2.0",
+  "generated_at": "2026-11-11T00:11:51+00:00",
   "host": {
     "name": "TEST-PC",
     "os": "Windows-11-10.0.22631-SP0",
@@ -10,8 +10,8 @@
   },
   "scan": {
     "duration_seconds": 47.71,
-    "modules_total": 19,
-    "modules_available": 19,
+    "modules_total": 20,
+    "modules_available": 20,
     "modules": [
       {
         "name": "autoruns",
@@ -143,11 +143,19 @@
       },
       {
         "name": "lsa_appinit",
-        "label": "LSA / AppInit / IFEO",
+        "label": "LSA / AppInit / IFEO / Winlogon",
         "stage": 4,
         "status": "ok",
         "count": 0,
         "error": null
+      },
+      {
+        "status": "ok",
+        "count": 0,
+        "error": null,
+        "name": "persistence_ext",
+        "label": "冷门持久化扩展点（Netsh/TimeProvider/Print 等）",
+        "stage": 8
       },
       {
         "name": "browser_ext",
@@ -279,7 +287,15 @@
           "AUTORUNS_SIG_INVALID"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_INVALID"
+      "rule_id": "AUTORUNS_SIG_INVALID",
+      "remediation": {
+        "summary": "文件签名无效或内容被篡改（证书链失败 / 摘要不匹配）。",
+        "expected": "文件签名有效且与官方发布版本一致",
+        "actual": "签名状态见 evidence（status=invalid / error）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -318,7 +334,15 @@
           "AUTORUNS_SIG_INVALID"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_INVALID"
+      "rule_id": "AUTORUNS_SIG_INVALID",
+      "remediation": {
+        "summary": "文件签名无效或内容被篡改（证书链失败 / 摘要不匹配）。",
+        "expected": "文件签名有效且与官方发布版本一致",
+        "actual": "签名状态见 evidence（status=invalid / error）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -357,7 +381,15 @@
           "AUTORUNS_SIG_UNSIGNED"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "remediation": {
+        "summary": "可执行文件没有有效数字签名，来源不明。",
+        "expected": "文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）",
+        "actual": "签名状态见 evidence（status=unsigned）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -403,7 +435,15 @@
           "AUTORUNS_SIG_UNSIGNED"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "remediation": {
+        "summary": "可执行文件没有有效数字签名，来源不明。",
+        "expected": "文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）",
+        "actual": "签名状态见 evidence（status=unsigned）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -449,7 +489,15 @@
           "AUTORUNS_SIG_UNSIGNED"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "remediation": {
+        "summary": "可执行文件没有有效数字签名，来源不明。",
+        "expected": "文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）",
+        "actual": "签名状态见 evidence（status=unsigned）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -488,7 +536,15 @@
           "AUTORUNS_SIG_UNSIGNED"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_UNSIGNED"
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "remediation": {
+        "summary": "可执行文件没有有效数字签名，来源不明。",
+        "expected": "文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）",
+        "actual": "签名状态见 evidence（status=unsigned）。",
+        "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -512,7 +568,15 @@
           "AUTORUNS_USERWRITABLE"
         ]
       },
-      "rule_id": "AUTORUNS_USERWRITABLE"
+      "rule_id": "AUTORUNS_USERWRITABLE",
+      "remediation": {
+        "summary": "自启动项位于用户可写目录，普通用户可替换该文件实现持久化。",
+        "expected": "自启动程序位于受保护目录（Program Files / System32），且签名可信",
+        "actual": "自启动路径及可写性见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"\n# 确认为恶意后删除该自启动项并按需隔离/删除对应文件",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -541,7 +605,15 @@
           "AUTORUNS_USERWRITABLE"
         ]
       },
-      "rule_id": "AUTORUNS_USERWRITABLE"
+      "rule_id": "AUTORUNS_USERWRITABLE",
+      "remediation": {
+        "summary": "自启动项位于用户可写目录，普通用户可替换该文件实现持久化。",
+        "expected": "自启动程序位于受保护目录（Program Files / System32），且签名可信",
+        "actual": "自启动路径及可写性见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"\n# 确认为恶意后删除该自启动项并按需隔离/删除对应文件",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -565,7 +637,15 @@
           "AUTORUNS_USERWRITABLE"
         ]
       },
-      "rule_id": "AUTORUNS_USERWRITABLE"
+      "rule_id": "AUTORUNS_USERWRITABLE",
+      "remediation": {
+        "summary": "自启动项位于用户可写目录，普通用户可替换该文件实现持久化。",
+        "expected": "自启动程序位于受保护目录（Program Files / System32），且签名可信",
+        "actual": "自启动路径及可写性见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"\n# 确认为恶意后删除该自启动项并按需隔离/删除对应文件",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "HIGH",
@@ -581,7 +661,15 @@
           "DEFENDER_EXCLUSION"
         ]
       },
-      "rule_id": "DEFENDER_EXCLUSION"
+      "rule_id": "DEFENDER_EXCLUSION",
+      "remediation": {
+        "summary": "Microsoft Defender 排除项被添加，攻击者可借此让恶意文件不被扫描/查杀。",
+        "expected": "ExclusionPath / ExclusionProcess / ExclusionExtension 中无可疑项",
+        "actual": "可疑排除项见 evidence。",
+        "command": "powershell -NoProfile -Command \"Get-MpPreference | Format-List ExclusionPath, ExclusionProcess, ExclusionExtension\"\n# 删除可疑排除项（把 <Path> / <Process> / <Extension> 换成实际值）：\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionPath '<Path>'\"\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionProcess '<Process>'\"\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionExtension '<Extension>'\"",
+        "risk": "HIGH",
+        "requires_admin": true
+      }
     },
     {
       "severity": "LOW",
@@ -600,7 +688,15 @@
           "COM_HIJACK_LOW"
         ]
       },
-      "rule_id": "COM_HIJACK_LOW"
+      "rule_id": "COM_HIJACK_LOW",
+      "remediation": {
+        "summary": "COM 组件的 InprocServer32 指向非系统路径，可能被用于持久化或劫持。",
+        "expected": "InprocServer32 默认值指向系统/官方组件的 DLL（如 %SystemRoot%\\System32\\...）",
+        "actual": "CLSID 与当前 InprocServer32 见 evidence。",
+        "command": "reg query \"HKLM\\SOFTWARE\\Classes\\CLSID\\<CLSID>\\InprocServer32\" /ve\nreg query \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\<CLSID>\\InprocServer32\" /ve\n# 备份后再恢复/删除可疑键（把 <CLSID> 换成实际值）：\nreg export \"HKLM\\SOFTWARE\\Classes\\CLSID\\<CLSID>\" \"%USERPROFILE%\\Desktop\\clsid_backup.reg\"",
+        "risk": "MEDIUM",
+        "requires_admin": true
+      }
     },
     {
       "severity": "LOW",
@@ -737,7 +833,15 @@
           "AUTORUNS_SIG_PATH_MASQUERADE"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE",
+      "remediation": {
+        "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+        "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+        "actual": "签名者与路径见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -793,7 +897,15 @@
           "AUTORUNS_SIG_PATH_MASQUERADE"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE",
+      "remediation": {
+        "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+        "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+        "actual": "签名者与路径见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -829,7 +941,15 @@
           "AUTORUNS_SIG_PATH_MASQUERADE"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE",
+      "remediation": {
+        "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+        "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+        "actual": "签名者与路径见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -882,7 +1002,15 @@
           "AUTORUNS_SIG_PATH_MASQUERADE"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE",
+      "remediation": {
+        "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+        "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+        "actual": "签名者与路径见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -938,7 +1066,15 @@
           "AUTORUNS_SIG_PATH_MASQUERADE"
         ]
       },
-      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE"
+      "rule_id": "AUTORUNS_SIG_PATH_MASQUERADE",
+      "remediation": {
+        "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+        "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+        "actual": "签名者与路径见 evidence。",
+        "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -1155,7 +1291,15 @@
           "EXT_PERM_HIGH"
         ]
       },
-      "rule_id": "EXT_PERM_HIGH"
+      "rule_id": "EXT_PERM_HIGH",
+      "remediation": {
+        "summary": "浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -1424,7 +1568,15 @@
           "EXT_PERM_HIGH"
         ]
       },
-      "rule_id": "EXT_PERM_HIGH"
+      "rule_id": "EXT_PERM_HIGH",
+      "remediation": {
+        "summary": "浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -1641,7 +1793,15 @@
           "EXT_PERM_HIGH"
         ]
       },
-      "rule_id": "EXT_PERM_HIGH"
+      "rule_id": "EXT_PERM_HIGH",
+      "remediation": {
+        "summary": "浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "HIGH",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -2262,7 +2422,15 @@
           "EXT_PERM_MED"
         ]
       },
-      "rule_id": "EXT_PERM_MED"
+      "rule_id": "EXT_PERM_MED",
+      "remediation": {
+        "summary": "浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "MEDIUM",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -2473,7 +2641,15 @@
           "EXT_PERM_MED"
         ]
       },
-      "rule_id": "EXT_PERM_MED"
+      "rule_id": "EXT_PERM_MED",
+      "remediation": {
+        "summary": "浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "MEDIUM",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -2638,7 +2814,15 @@
           "EXT_PERM_MED"
         ]
       },
-      "rule_id": "EXT_PERM_MED"
+      "rule_id": "EXT_PERM_MED",
+      "remediation": {
+        "summary": "浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "MEDIUM",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",
@@ -2837,7 +3021,15 @@
           "EXT_PERM_MED"
         ]
       },
-      "rule_id": "EXT_PERM_MED"
+      "rule_id": "EXT_PERM_MED",
+      "remediation": {
+        "summary": "浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。",
+        "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+        "actual": "扩展名称、ID 与权限见 evidence。",
+        "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+        "risk": "MEDIUM",
+        "requires_admin": false
+      }
     },
     {
       "severity": "INFO",

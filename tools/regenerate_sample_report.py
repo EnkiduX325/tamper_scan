@@ -5,7 +5,7 @@
 ----
 1. 在授权的测试机上以管理员身份生成原始报告：
        python main.py --scan --format both --output reports\\sample_report
-2. 用本脚本脱敏并归一化（版本号 / 19 个模块状态 / HTML 重渲染）：
+2. 用本脚本脱敏并归一化（版本号 / 20 个模块状态 / 只读修复建议 / HTML 重渲染）：
        python tools\\regenerate_sample_report.py
 3. 本地校验（与 CI 一致）：
        powershell -ExecutionPolicy Bypass -File tools\\verify_v11.ps1
@@ -75,7 +75,7 @@ def _scrub(value, tokens: list[tuple[str, str]]) -> object:
 
 
 def _normalize_modules(report: dict) -> None:
-    """按 core.scanner.MODULE_REGISTRY 归一化模块状态列表（保证 19 个模块与顺序一致）。"""
+    """按 core.scanner.MODULE_REGISTRY 归一化模块状态列表（保证 20 个模块与顺序一致）。"""
     old_entries = {str(item.get("name")): item for item in report.get("scan", {}).get("modules", [])}
     modules: list[dict] = []
     for name, label, stage in MODULE_REGISTRY:
@@ -85,6 +85,18 @@ def _normalize_modules(report: dict) -> None:
     report.setdefault("scan", {})["modules"] = modules
     report["scan"]["modules_total"] = len(modules)
     report["scan"]["modules_available"] = sum(1 for item in modules if item.get("status") == "ok")
+
+
+def _attach_remediation(report: dict) -> None:
+    """为样例报告挂载只读修复建议（仅写 JSON 字段，绝不执行 remediation.command）。"""
+    findings = report.get("findings")
+    if not isinstance(findings, list):
+        return
+    try:
+        remediations = reporter.load_remediation()
+        report["findings"] = reporter.apply_remediation(findings, remediations)
+    except (AttributeError, OSError, ValueError, TypeError) as exc:  # pragma: no cover - 环境相关
+        print(f"WARNING: remediation not attached: {exc}", file=sys.stderr)
 
 
 def main() -> int:
@@ -125,6 +137,7 @@ def main() -> int:
         "user": "User",
     }
     _normalize_modules(report)
+    _attach_remediation(report)
 
     JSON_PATH.write_text(reporter.render_json(report) + "\n", encoding="utf-8")
     HTML_PATH.write_text(reporter.render_html(report), encoding="utf-8")

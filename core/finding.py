@@ -95,6 +95,9 @@ _MODULE_RULE_PREFIXES: tuple[str, ...] = (
     "TASK_",
     "SVC_",
     "SERVICE_",
+    # RDP_：credential_rdp 的 RDP_SERVICEDLL_TAMPER 与服务模块泛化规则
+    # SVC_SERVICEDLL_TAMPER 指向同一 DLL 时归并到基名 SERVICEDLL_TAMPER。
+    "RDP_",
     "WMI_",
     "BITS_",
     "PS_PROFILE_",

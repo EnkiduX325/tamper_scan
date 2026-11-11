@@ -61,5 +61,6 @@
       "require_signature_status": "valid",
       "note": "NVIDIA 32 位驱动插件正常安装到 SysWOW64 根目录"
     }
-  ]
+  ],
+  "persistence_ext_allow": []
 }

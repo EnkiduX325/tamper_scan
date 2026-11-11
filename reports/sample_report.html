@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TamperScan 扫描报告 - 2026-11-10T14:49:40+00:00</title>
+<title>TamperScan 扫描报告 - 2026-11-11T00:11:51+00:00</title>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1f2328; --muted: #57606a;
@@ -58,6 +58,18 @@
   .detail { margin: 4px 14px 0; }
   .evidence { margin: 8px 14px 12px; padding: 10px; background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; }
   pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 0; }
+  .remediation { margin: 0 14px 12px; padding: 10px 12px; background: #f0f7ff; border: 1px solid #b6d4f0; border-left: 4px solid var(--info); border-radius: 6px; }
+  .remediation-title { margin: 0 0 6px; font-size: 13px; color: var(--info); }
+  .remediation-meta { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 13px; }
+  .remediation-meta div { display: contents; }
+  .remediation-meta dt { color: var(--muted); }
+  .remediation-meta dd { margin: 0; word-break: break-all; }
+  .remediation-risk { font-weight: 600; }
+  .remediation-risk.risk-HIGH { color: var(--high); }
+  .remediation-risk.risk-MEDIUM { color: var(--medium); }
+  .remediation-risk.risk-LOW { color: var(--low); }
+  .remediation-hint { color: var(--muted); font-size: 11px; margin: 8px 0 4px; }
+  .remediation-command { background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
   .empty { color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 24px; }
 </style>
@@ -67,11 +79,11 @@
   <header class="page-header">
     <h1>TamperScan 扫描报告</h1>
     <dl class="meta">
-      <div><dt>生成时间</dt><dd>2026-11-10T14:49:40+00:00</dd></div>
+      <div><dt>生成时间</dt><dd>2026-11-11T00:11:51+00:00</dd></div>
       <div><dt>主机</dt><dd>TEST-PC（Windows-11-10.0.22631-SP0，管理员）</dd></div>
-      <div><dt>工具版本</dt><dd>TamperScan 1.1.0</dd></div>
+      <div><dt>工具版本</dt><dd>TamperScan 1.2.0</dd></div>
       <div><dt>扫描耗时</dt><dd>47.71 秒</dd></div>
-      <div><dt>扫描模块</dt><dd>19/19 可用</dd></div>
+      <div><dt>扫描模块</dt><dd>20/20 可用</dd></div>
       <div><dt>退出码</dt><dd>2（HIGH=2，MEDIUM=1，其余 0）</dd></div>
     </dl>
   </header>
@@ -211,7 +223,14 @@
         </tr>
         <tr>
           <td>lsa_appinit</td>
-          <td>LSA / AppInit / IFEO</td>
+          <td>LSA / AppInit / IFEO / Winlogon</td>
+          <td>ok</td>
+          <td>0</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>persistence_ext</td>
+          <td>冷门持久化扩展点（Netsh/TimeProvider/Print 等）</td>
           <td>ok</td>
           <td>0</td>
           <td></td>
@@ -340,6 +359,15 @@
     &#34;AUTORUNS_SIG_INVALID&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>文件签名无效或内容被篡改（证书链失败 / 摘要不匹配）。</dd></div><div><dt>建议值</dt><dd>文件签名有效且与官方发布版本一致</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=invalid / error）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -380,6 +408,15 @@
     &#34;AUTORUNS_SIG_INVALID&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>文件签名无效或内容被篡改（证书链失败 / 摘要不匹配）。</dd></div><div><dt>建议值</dt><dd>文件签名有效且与官方发布版本一致</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=invalid / error）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -420,6 +457,15 @@
     &#34;AUTORUNS_SIG_UNSIGNED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>可执行文件没有有效数字签名，来源不明。</dd></div><div><dt>建议值</dt><dd>文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=unsigned）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -467,6 +513,15 @@
     &#34;AUTORUNS_SIG_UNSIGNED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>可执行文件没有有效数字签名，来源不明。</dd></div><div><dt>建议值</dt><dd>文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=unsigned）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -514,6 +569,15 @@
     &#34;AUTORUNS_SIG_UNSIGNED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>可执行文件没有有效数字签名，来源不明。</dd></div><div><dt>建议值</dt><dd>文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=unsigned）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -554,6 +618,15 @@
     &#34;AUTORUNS_SIG_UNSIGNED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>可执行文件没有有效数字签名，来源不明。</dd></div><div><dt>建议值</dt><dd>文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）</dd></div><div><dt>当前值</dt><dd>签名状态见 evidence（status=unsigned）。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-AuthenticodeSignature -LiteralPath &#39;&lt;Path&gt;&#39; | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath &#39;&lt;Path&gt;&#39; -Algorithm SHA256 | Format-List&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -579,6 +652,16 @@
     &#34;AUTORUNS_USERWRITABLE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>自启动项位于用户可写目录，普通用户可替换该文件实现持久化。</dd></div><div><dt>建议值</dt><dd>自启动程序位于受保护目录（Program Files / System32），且签名可信</dd></div><div><dt>当前值</dt><dd>自启动路径及可写性见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;
+# 确认为恶意后删除该自启动项并按需隔离/删除对应文件</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -609,6 +692,16 @@
     &#34;AUTORUNS_USERWRITABLE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>自启动项位于用户可写目录，普通用户可替换该文件实现持久化。</dd></div><div><dt>建议值</dt><dd>自启动程序位于受保护目录（Program Files / System32），且签名可信</dd></div><div><dt>当前值</dt><dd>自启动路径及可写性见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;
+# 确认为恶意后删除该自启动项并按需隔离/删除对应文件</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -634,6 +727,16 @@
     &#34;AUTORUNS_USERWRITABLE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>自启动项位于用户可写目录，普通用户可替换该文件实现持久化。</dd></div><div><dt>建议值</dt><dd>自启动程序位于受保护目录（Program Files / System32），且签名可信</dd></div><div><dt>当前值</dt><dd>自启动路径及可写性见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;
+# 确认为恶意后删除该自启动项并按需隔离/删除对应文件</pre>
+      </section>
     </details>
     <details class="finding sev-border-HIGH" open>
       <summary>
@@ -651,6 +754,19 @@
     &#34;DEFENDER_EXCLUSION&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>Microsoft Defender 排除项被添加，攻击者可借此让恶意文件不被扫描/查杀。</dd></div><div><dt>建议值</dt><dd>ExclusionPath / ExclusionProcess / ExclusionExtension 中无可疑项</dd></div><div><dt>当前值</dt><dd>可疑排除项见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>是</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;Get-MpPreference | Format-List ExclusionPath, ExclusionProcess, ExclusionExtension&#34;
+# 删除可疑排除项（把 &lt;Path&gt; / &lt;Process&gt; / &lt;Extension&gt; 换成实际值）：
+powershell -NoProfile -Command &#34;Remove-MpPreference -ExclusionPath &#39;&lt;Path&gt;&#39;&#34;
+powershell -NoProfile -Command &#34;Remove-MpPreference -ExclusionProcess &#39;&lt;Process&gt;&#39;&#34;
+powershell -NoProfile -Command &#34;Remove-MpPreference -ExclusionExtension &#39;&lt;Extension&gt;&#39;&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-LOW">
       <summary>
@@ -671,6 +787,18 @@
     &#34;COM_HIJACK_LOW&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>COM 组件的 InprocServer32 指向非系统路径，可能被用于持久化或劫持。</dd></div><div><dt>建议值</dt><dd>InprocServer32 默认值指向系统/官方组件的 DLL（如 %SystemRoot%\System32\...）</dd></div><div><dt>当前值</dt><dd>CLSID 与当前 InprocServer32 见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-MEDIUM">MEDIUM</dd></div>
+          <div><dt>需要管理员</dt><dd>是</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">reg query &#34;HKLM\SOFTWARE\Classes\CLSID\&lt;CLSID&gt;\InprocServer32&#34; /ve
+reg query &#34;HKLM\SOFTWARE\Classes\WOW6432Node\CLSID\&lt;CLSID&gt;\InprocServer32&#34; /ve
+# 备份后再恢复/删除可疑键（把 &lt;CLSID&gt; 换成实际值）：
+reg export &#34;HKLM\SOFTWARE\Classes\CLSID\&lt;CLSID&gt;&#34; &#34;%USERPROFILE%\Desktop\clsid_backup.reg&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-LOW">
       <summary>
@@ -810,6 +938,15 @@
     &#34;AUTORUNS_SIG_PATH_MASQUERADE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。</dd></div><div><dt>建议值</dt><dd>System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商</dd></div><div><dt>当前值</dt><dd>签名者与路径见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -867,6 +1004,15 @@
     &#34;AUTORUNS_SIG_PATH_MASQUERADE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。</dd></div><div><dt>建议值</dt><dd>System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商</dd></div><div><dt>当前值</dt><dd>签名者与路径见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -904,6 +1050,15 @@
     &#34;AUTORUNS_SIG_PATH_MASQUERADE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。</dd></div><div><dt>建议值</dt><dd>System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商</dd></div><div><dt>当前值</dt><dd>签名者与路径见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -958,6 +1113,15 @@
     &#34;AUTORUNS_SIG_PATH_MASQUERADE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。</dd></div><div><dt>建议值</dt><dd>System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商</dd></div><div><dt>当前值</dt><dd>签名者与路径见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -1015,6 +1179,15 @@
     &#34;AUTORUNS_SIG_PATH_MASQUERADE&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。</dd></div><div><dt>建议值</dt><dd>System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商</dd></div><div><dt>当前值</dt><dd>签名者与路径见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">powershell -NoProfile -Command &#34;$p=&#39;&lt;Path&gt;&#39;; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate&#34;</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -1233,6 +1406,17 @@
     &#34;EXT_PERM_HIGH&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -1503,6 +1687,17 @@
     &#34;EXT_PERM_HIGH&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -1721,6 +1916,17 @@
     &#34;EXT_PERM_HIGH&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-HIGH">HIGH</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -2347,6 +2553,17 @@
     &#34;EXT_PERM_MED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-MEDIUM">MEDIUM</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -2559,6 +2776,17 @@
     &#34;EXT_PERM_MED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-MEDIUM">MEDIUM</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -2725,6 +2953,17 @@
     &#34;EXT_PERM_MED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-MEDIUM">MEDIUM</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>
@@ -2925,6 +3164,17 @@
     &#34;EXT_PERM_MED&#34;
   ]
 }</pre>
+      <section class="remediation">
+        <h3 class="remediation-title">建议处理</h3>
+        <dl class="remediation-meta">
+<div><dt>建议</dt><dd>浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。</dd></div><div><dt>建议值</dt><dd>仅保留可信来源、权限与用途相符的浏览器扩展</dd></div><div><dt>当前值</dt><dd>扩展名称、ID 与权限见 evidence。</dd></div>          <div><dt>风险等级</dt><dd class="remediation-risk risk-MEDIUM">MEDIUM</dd></div>
+          <div><dt>需要管理员</dt><dd>否</dd></div>
+        </dl>
+        <p class="remediation-hint">以下命令仅供手动复制执行，TamperScan 不会自动运行：</p>
+        <pre class="remediation-command">start msedge &#34;edge://extensions&#34;
+start chrome &#34;chrome://extensions&#34;
+# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）</pre>
+      </section>
     </details>
     <details class="finding sev-border-INFO">
       <summary>

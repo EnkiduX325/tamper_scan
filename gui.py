@@ -77,6 +77,13 @@ SEVERITY_LABELS = {
     "SKIPPED": "跳过",
 }
 
+#: 修复建议风险等级配色（与严重等级同色系）
+REMEDIATION_RISK_COLORS = {
+    "HIGH": SEVERITY_COLORS["HIGH"],
+    "MEDIUM": SEVERITY_COLORS["MEDIUM"],
+    "LOW": SEVERITY_COLORS["LOW"],
+}
+
 FONT_FAMILY = "Segoe UI"
 FONT_MONO = "Consolas"
 
@@ -321,7 +328,7 @@ class FindingTree(tk.Frame):
 
 
 class DetailPanel(tk.Frame):
-    """右侧详情面板：等级徽章 + target / detail / rule_id / category / evidence。"""
+    """右侧详情面板：等级徽章 + target / detail / rule_id / category / evidence / 建议处理。"""
 
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(
@@ -363,10 +370,21 @@ class DetailPanel(tk.Frame):
             justify="center",
         )
 
-        # 内容区（默认隐藏）
+        # 内容区（默认隐藏）：放进 Canvas 里，详情较多时可滚动，避免小窗口下被裁掉
         self._content = tk.Frame(self, bg=COLORS["card"])
+        self._canvas = tk.Canvas(self._content, bg=COLORS["card"], highlightthickness=0, bd=0)
+        self._content_scrollbar = ttk.Scrollbar(self._content, orient="vertical", command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=self._content_scrollbar.set)
+        self._content_scrollbar.pack(side="right", fill="y")
+        self._canvas.pack(side="left", fill="both", expand=True)
+        self._body = tk.Frame(self._canvas, bg=COLORS["card"])
+        self._body_window = self._canvas.create_window((0, 0), window=self._body, anchor="nw")
+        self._body.bind("<Configure>", self._on_body_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+        self._canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self._body.bind("<MouseWheel>", self._on_mousewheel)
 
-        self._meta_wrap = tk.Frame(self._content, bg=COLORS["card"])
+        self._meta_wrap = tk.Frame(self._body, bg=COLORS["card"])
         self._meta_wrap.pack(fill="x", padx=16, pady=(0, 8))
         self._rule_var = tk.StringVar(value="")
         self._category_var = tk.StringVar(value="")
@@ -393,12 +411,13 @@ class DetailPanel(tk.Frame):
         self._target_text = self._make_section("目标（target）", height=2)
         self._detail_text = self._make_section("描述（detail）", height=2)
         self._evidence_text = self._make_section("证据（evidence）", height=5, mono=True)
+        self._build_remediation_section()
 
         self.show_placeholder()
 
     # -- 构建 --------------------------------------------------------------
     def _make_section(self, title: str, height: int, mono: bool = False) -> tk.Text:
-        wrap = tk.Frame(self._content, bg=COLORS["card"])
+        wrap = tk.Frame(self._body, bg=COLORS["card"])
         wrap.pack(fill="both", expand=(height >= 8), padx=16, pady=(0, 6))
         tk.Label(
             wrap,
@@ -432,6 +451,207 @@ class DetailPanel(tk.Frame):
         text.configure(state="disabled")
         return text
 
+    # -- 滚动 --------------------------------------------------------------
+    def _on_body_configure(self, _event: tk.Event) -> None:
+        try:
+            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        except tk.TclError:
+            pass
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        try:
+            self._canvas.itemconfigure(self._body_window, width=event.width)
+        except tk.TclError:
+            pass
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        """鼠标滚轮滚动详情内容（内容未超出可视区域时不拦截）。"""
+        try:
+            first, last = self._canvas.yview()
+            if first <= 0.0 and last >= 1.0:
+                return
+            delta = int(-event.delta / 120) if getattr(event, "delta", 0) else 0
+            if delta:
+                self._canvas.yview_scroll(delta, "units")
+        except tk.TclError:
+            pass
+
+    # -- 建议处理 ----------------------------------------------------------
+    def _build_remediation_section(self) -> None:
+        """构建「建议处理」区块；默认不显示，命中 remediation 时由 show_finding 显示。"""
+        self._command = ""
+        self._copy_after: str | None = None
+        self._remediation = tk.Frame(self._body, bg=COLORS["card"])
+
+        head = tk.Frame(self._remediation, bg=COLORS["card"])
+        head.pack(fill="x", pady=(0, 4))
+        tk.Label(
+            head,
+            text="建议处理",
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=(FONT_FAMILY, 10, "bold"),
+            anchor="w",
+        ).pack(side="left")
+        self._risk_label = tk.Label(
+            head,
+            text="",
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9, "bold"),
+        )
+        self._risk_label.pack(side="right")
+
+        self._rem_summary_var = tk.StringVar(value="")
+        self._rem_expected_var = tk.StringVar(value="")
+        self._rem_actual_var = tk.StringVar(value="")
+        self._rem_admin_var = tk.StringVar(value="")
+
+        tk.Label(
+            self._remediation,
+            textvariable=self._rem_summary_var,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=(FONT_FAMILY, 9),
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        ).pack(fill="x", pady=(0, 4))
+
+        grid = tk.Frame(self._remediation, bg=COLORS["card"])
+        grid.pack(fill="x")
+        grid.columnconfigure(1, weight=1)
+        for row, (name, var) in enumerate(
+            (
+                ("建议值", self._rem_expected_var),
+                ("当前值", self._rem_actual_var),
+                ("需要管理员", self._rem_admin_var),
+            )
+        ):
+            tk.Label(
+                grid,
+                text=name,
+                bg=COLORS["card"],
+                fg=COLORS["muted"],
+                font=(FONT_FAMILY, 9),
+                anchor="nw",
+            ).grid(row=row, column=0, sticky="nw", padx=(0, 10), pady=1)
+            tk.Label(
+                grid,
+                textvariable=var,
+                bg=COLORS["card"],
+                fg=COLORS["text"],
+                font=(FONT_FAMILY, 9),
+                anchor="w",
+                justify="left",
+                wraplength=230,
+            ).grid(row=row, column=1, sticky="w", pady=1)
+
+        self._command_wrap = tk.Frame(self._remediation, bg=COLORS["card"])
+        self._command_wrap.pack(fill="x", pady=(6, 0))
+        tk.Label(
+            self._command_wrap,
+            text="命令（只读；扫描器不会执行，仅供手动复制）",
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=(FONT_FAMILY, 9),
+            anchor="w",
+        ).pack(fill="x", pady=(0, 3))
+        command_body = tk.Frame(
+            self._command_wrap,
+            bg="#FAFAFA",
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        command_body.pack(fill="x")
+        self._command_text = tk.Text(
+            command_body,
+            height=4,
+            wrap="word",
+            bg="#FAFAFA",
+            fg=COLORS["text"],
+            font=(FONT_MONO, 9),
+            relief="flat",
+            borderwidth=0,
+            padx=8,
+            pady=4,
+            highlightthickness=0,
+        )
+        self._command_text.pack(fill="x")
+        self._command_text.configure(state="disabled")
+        self._copy_button = ttk.Button(
+            self._command_wrap,
+            text="复制命令",
+            style="Secondary.TButton",
+            command=self._on_copy_command,
+        )
+        self._copy_button.pack(anchor="w", pady=(6, 0))
+
+    def _apply_remediation_view(self, remediation: dict[str, Any]) -> None:
+        """把 remediation dict 填入「建议处理」区块并显示（含复制按钮状态）。"""
+        self._rem_summary_var.set(str(remediation.get("summary") or ""))
+        self._rem_expected_var.set(str(remediation.get("expected") or ""))
+        self._rem_actual_var.set(str(remediation.get("actual") or ""))
+        requires_admin = bool(remediation.get("requires_admin"))
+        self._rem_admin_var.set("是（命令需以管理员身份运行）" if requires_admin else "否")
+        risk = str(remediation.get("risk") or "").upper()
+        self._risk_label.configure(
+            text=f"风险 {risk}" if risk else "",
+            fg=REMEDIATION_RISK_COLORS.get(risk, COLORS["muted"]),
+        )
+        self._command = str(remediation.get("command") or "")
+        self._set_text(self._command_text, self._command)
+        self._copy_button.configure(text="复制命令")
+        if self._command:
+            self._command_wrap.pack(fill="x", pady=(6, 0))
+            self._copy_button.configure(state="normal")
+        else:
+            self._command_wrap.pack_forget()
+            self._copy_button.configure(state="disabled")
+        self._remediation.pack(fill="x", padx=16, pady=(0, 10))
+
+    def _hide_remediation_view(self) -> None:
+        """隐藏「建议处理」区块并清空复制状态（无 remediation 的 finding）。"""
+        self._remediation.pack_forget()
+        self._command = ""
+        self._set_text(self._command_text, "")
+        try:
+            self._copy_button.configure(text="复制命令", state="disabled")
+        except tk.TclError:
+            pass
+
+    def _on_copy_command(self) -> None:
+        """把只读命令复制到剪贴板，并短暂显示「已复制」反馈。"""
+        command = self._command
+        if not command:
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(command)
+        except tk.TclError:
+            return
+        try:
+            self._copy_button.configure(text="已复制")
+        except tk.TclError:
+            return
+        if self._copy_after is not None:
+            try:
+                self.after_cancel(self._copy_after)
+            except tk.TclError:
+                pass
+        try:
+            self._copy_after = self.after(1500, self._reset_copy_button)
+        except tk.TclError:
+            self._copy_after = None
+
+    def _reset_copy_button(self) -> None:
+        self._copy_after = None
+        try:
+            if self.winfo_exists():
+                self._copy_button.configure(text="复制命令")
+        except tk.TclError:
+            pass
+
     # -- 数据 --------------------------------------------------------------
     @staticmethod
     def _set_text(widget: tk.Text, value: str) -> None:
@@ -444,6 +664,7 @@ class DetailPanel(tk.Frame):
         self._content.pack_forget()
         self._badge.configure(text="", bg=COLORS["card"], fg=COLORS["muted"])
         self._placeholder.pack(fill="both", expand=True)
+        self._hide_remediation_view()
 
     def show_finding(self, finding: dict[str, Any] | None) -> None:
         if not finding:
@@ -468,6 +689,15 @@ class DetailPanel(tk.Frame):
         except (TypeError, ValueError):
             evidence = str(finding.get("evidence") or "")
         self._set_text(self._evidence_text, evidence)
+        remediation = finding.get("remediation")
+        if isinstance(remediation, dict) and remediation:
+            self._apply_remediation_view(remediation)
+        else:
+            self._hide_remediation_view()
+        try:
+            self._canvas.yview_moveto(0)
+        except tk.TclError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -487,7 +717,8 @@ class App(tk.Tk):
         self.title("TamperScan —— Windows 防篡改扫描器")
         self.configure(bg=COLORS["bg"])
         self.geometry("1240x860")
-        self.minsize(1060, 740)
+        # 允许缩到 1100x720：详情面板内容区可滚动，小窗口下不会裁掉「建议处理」区块
+        self.minsize(1060, 720)
 
         self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._scanning = False
@@ -843,6 +1074,12 @@ class App(tk.Tk):
         counts = severity_counts(result.findings)
         for severity, card in self.stats.items():
             card.set_value(counts.get(severity, 0))
+
+        # 只读修复建议：在加载结果表之前挂载 remediation，详情面板才能显示「建议处理」与复制按钮
+        try:
+            result.findings = reporter.apply_remediation(result.findings)
+        except Exception:  # noqa: BLE001 - 建议加载失败不能中断扫描结果展示
+            pass
 
         self.results_tree.load(result.findings)
         self.progress.configure(value=100)

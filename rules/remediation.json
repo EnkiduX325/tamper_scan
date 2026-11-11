@@ -1,0 +1,261 @@
+{
+  "_comment": "TamperScan V1.2 只读修复建议（remediation）。command 仅供用户手动复制执行，扫描器与报告器绝不会自动运行任何命令。字段说明：summary=问题说明；expected=建议值/正常状态；actual=当前值（具体值见 finding 的 evidence）；command=手动修复命令建议（reg / PowerShell）；risk=LOW|MEDIUM|HIGH 表示该问题被利用的风险等级；requires_admin=执行修复命令是否需要管理员权限。",
+  "rules": {
+    "WINLOGON_SHELL_TAMPER": {
+      "summary": "Winlogon 的 Shell 值被改成非 explorer.exe，攻击者可在用户登录时加载任意程序。",
+      "expected": "Shell = explorer.exe",
+      "actual": "当前 Shell 值见 finding 的 evidence（通常为可疑程序路径）。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Shell\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Shell /t REG_SZ /d \"explorer.exe\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WINLOGON_USERINIT_TAMPER": {
+      "summary": "Winlogon 的 Userinit 值被篡改，登录时会额外执行攻击者程序。",
+      "expected": "Userinit = C:\\Windows\\system32\\userinit.exe,",
+      "actual": "当前 Userinit 值见 evidence；正常应仅包含 system32\\userinit.exe。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Userinit\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Userinit /t REG_SZ /d \"C:\\Windows\\system32\\userinit.exe,\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WINLOGON_GINADLL_TAMPER": {
+      "summary": "Winlogon 的 GinaDLL 值被设置，登录界面可加载第三方/恶意 DLL 窃取凭据。",
+      "expected": "GinaDLL 不存在（系统默认不设置该值）",
+      "actual": "当前 GinaDLL 值见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v GinaDLL\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v GinaDLL /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WINLOGON_APPSETUP_TAMPER": {
+      "summary": "Winlogon 的 AppSetup 值被篡改，可劫持登录时的用户初始化流程。",
+      "expected": "AppSetup = C:\\Windows\\system32\\winlogon.exe",
+      "actual": "当前 AppSetup 值见 evidence；系统默认指向 winlogon.exe。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v AppSetup\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v AppSetup /t REG_SZ /d \"C:\\Windows\\system32\\winlogon.exe\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WINLOGON_TASKMAN_TAMPER": {
+      "summary": "Winlogon 的 Taskman 值被设置，任务管理器会被替换为攻击者程序。",
+      "expected": "Taskman 不存在（使用系统默认任务管理器 taskmgr.exe）",
+      "actual": "当前 Taskman 值见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Taskman\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v Taskman /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WINLOGON_NOTIFY_TAMPER": {
+      "summary": "Winlogon\\Notify 下存在可疑通知包，登录/注销事件会加载其 DLL。",
+      "expected": "Notify 下仅保留系统内置项（如 ScCertProp / Schedule / SensLogn / wlballoon，均指向系统 DLL）",
+      "actual": "可疑 Notify 项见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Notify\" /s\n# 确认非系统组件后删除对应值（把 <ValueName> 换成实际名称）：\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Notify\" /v \"<ValueName>\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "AUTOADMINLOGON_PLAINTEXT": {
+      "summary": "Winlogon 下存在明文 DefaultPassword，任何能读取该注册表键的用户都可获取登录密码。",
+      "expected": "DefaultPassword 不存在；AutoAdminLogon = 0",
+      "actual": "当前 AutoAdminLogon / DefaultPassword 见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v DefaultPassword\nreg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v AutoAdminLogon\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v DefaultPassword /f\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v AutoAdminLogon /t REG_SZ /d \"0\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "LSA_AUTH_PACKAGE_TAMPER": {
+      "summary": "LSA Authentication Packages 被加入非系统 DLL，可在登录认证过程中加载恶意代码。",
+      "expected": "Authentication Packages = msv1_0",
+      "actual": "当前 Authentication Packages（REG_MULTI_SZ）见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v \"Authentication Packages\"\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v \"Authentication Packages\" /t REG_MULTI_SZ /d \"msv1_0\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "NETSH_HELPER_TAMPER": {
+      "summary": "NetSh 注册了可疑 helper DLL，执行 netsh 命令时会加载该 DLL。",
+      "expected": "HKLM\\SOFTWARE\\Microsoft\\NetSh 下 helper 仅保留可信系统 DLL（多数系统默认无自定义 helper）",
+      "actual": "可疑 helper 项见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\NetSh\" /s\n# 确认可疑后按值名删除（把 <ValueName> 换成实际名称）：\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\NetSh\" /v \"<ValueName>\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "TIMEPROVIDER_DLL_TAMPER": {
+      "summary": "W32Time 时间提供程序的 DllName 被指向非系统 DLL，时间同步时会加载恶意代码。",
+      "expected": "DllName = %SystemRoot%\\system32\\w32time.dll",
+      "actual": "当前 DllName 见 evidence（实际提供程序名称可能为 NtpClient 之外的名称）。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\TimeProviders\\NtpClient\" /v DllName\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\TimeProviders\\NtpClient\" /v DllName /t REG_EXPAND_SZ /d \"%SystemRoot%\\system32\\w32time.dll\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "PRINT_PROCESSOR_TAMPER": {
+      "summary": "打印处理器 Driver 值指向非系统 DLL，打印后台服务启动时会加载恶意代码。",
+      "expected": "Driver = winprint.dll（系统默认打印处理器）",
+      "actual": "当前打印处理器 Driver 见 evidence（实际处理器名称可能不同）。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Environments\\Windows x64\\Print Processors\" /s\n# 对可疑处理器恢复默认驱动（把 <ProcessorName> 换成实际名称）：\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Environments\\Windows x64\\Print Processors\\<ProcessorName>\" /v Driver /t REG_SZ /d \"winprint.dll\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "PRINT_MONITOR_TAMPER": {
+      "summary": "打印监视器 Driver 值指向非系统 DLL，可能随打印服务加载恶意代码。",
+      "expected": "Driver 指向对应厂商的系统/官方 Monitor DLL（如 localspl.dll、win32spl.dll、usbmon.dll）",
+      "actual": "当前监视器 Driver 见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\" /s\n# 确认可疑后先备份再删除（把 <MonitorName> 换成实际名称）：\nreg export \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\<MonitorName>\" \"%USERPROFILE%\\Desktop\\print_monitor_backup.reg\"\nreg delete \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\<MonitorName>\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "ACTIVE_SETUP_STUB": {
+      "summary": "Active Setup 的 StubPath 被指向可疑程序，用户首次登录时会自动执行。",
+      "expected": "StubPath 仅指向微软系统组件（如 %SystemRoot%\\system32\\...）",
+      "actual": "可疑 StubPath 见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\" /s /v StubPath\nreg query \"HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Active Setup\\Installed Components\" /s /v StubPath\n# 确认非系统组件后删除对应 GUID 项（把 <GUID> 换成实际值）：\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\<GUID>\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "APPCOMPAT_SHIM": {
+      "summary": "AppCompatFlags 中存在自定义 shim 或已安装 SDB，可被用于持久化或绕过检测。",
+      "expected": "Custom / InstalledSDB 仅包含已知兼容性修复，无指向用户可写目录的 SDB",
+      "actual": "可疑 AppCompat 项见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Custom\" /s\nreg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\InstalledSDB\" /s",
+      "risk": "MEDIUM",
+      "requires_admin": true
+    },
+    "SILENTPROCESS_EXIT_TAMPER": {
+      "summary": "SilentProcessExit 配置会在进程退出时启动 MonitorProcess，常被用于持久化或提权。",
+      "expected": "SilentProcessExit 下不存在非系统配置",
+      "actual": "可疑 SilentProcessExit 配置见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\" /s\n# 确认可疑后删除对应映像子键（把 <ImageName> 换成实际名称）：\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\<ImageName>\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "WER_LOCALDUMPS_TAMPER": {
+      "summary": "WER LocalDumps 被开启，崩溃时可能把进程内存（含凭据）写入可被攻击者读取的转储文件。",
+      "expected": "LocalDumps 不存在（默认关闭本地转储）",
+      "actual": "当前 LocalDumps 配置见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\LocalDumps\" /s\nreg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\LocalDumps\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "CMD_AUTORUN": {
+      "summary": "命令解释器的 AutoRun 值会在每次打开 cmd 时自动执行命令。",
+      "expected": "AutoRun 不存在",
+      "actual": "当前 AutoRun 值见 evidence。",
+      "command": "reg query \"HKCU\\Software\\Microsoft\\Command Processor\" /v AutoRun\nreg delete \"HKCU\\Software\\Microsoft\\Command Processor\" /v AutoRun /f\nreg query \"HKLM\\SOFTWARE\\Microsoft\\Command Processor\" /v AutoRun",
+      "risk": "MEDIUM",
+      "requires_admin": false
+    },
+    "SCRNSAVER_TAMPER": {
+      "summary": "屏幕保护程序被指向可疑可执行文件，系统闲置时会加载恶意程序。",
+      "expected": "SCRNSAVE.EXE = C:\\Windows\\system32\\scrnsave.scr；ScreenSaveActive = 1；ScreenSaverIsSecure = 1",
+      "actual": "当前 SCRNSAVE.EXE 等值见 evidence。",
+      "command": "reg query \"HKCU\\Control Panel\\Desktop\" /v SCRNSAVE.EXE\nreg add \"HKCU\\Control Panel\\Desktop\" /v SCRNSAVE.EXE /t REG_SZ /d \"C:\\Windows\\system32\\scrnsave.scr\" /f\nreg add \"HKCU\\Control Panel\\Desktop\" /v ScreenSaveActive /t REG_SZ /d \"1\" /f\nreg add \"HKCU\\Control Panel\\Desktop\" /v ScreenSaverIsSecure /t REG_SZ /d \"1\" /f",
+      "risk": "MEDIUM",
+      "requires_admin": false
+    },
+    "SVC_SERVICEDLL_TAMPER": {
+      "summary": "服务 ServiceDll 被指向非系统/用户可写目录的 DLL，svchost 加载服务时会执行攻击者代码。",
+      "expected": "ServiceDll = %SystemRoot%\\System32\\<ServiceName>.dll（以该服务正常安装路径为准）",
+      "actual": "当前 ServiceDll 见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>\\Parameters\" /v ServiceDll\n# 恢复正常 DLL 路径（把 <ServiceName> 换成实际服务名）：\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>\\Parameters\" /v ServiceDll /t REG_EXPAND_SZ /d \"%SystemRoot%\\System32\\<ServiceName>.dll\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "SVC_SERVICEDLL_ABSENT": {
+      "summary": "服务声明的 ServiceDll 文件不存在，可能是被删除的恶意服务，也可能系统组件已损坏。",
+      "expected": "ServiceDll 指向真实存在的系统 DLL",
+      "actual": "缺失的 ServiceDll 路径见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>\\Parameters\" /v ServiceDll\nsfc /scannow\n# 系统文件损坏时可用系统还原点恢复；确认是残留恶意服务后可删除该服务：\nsc delete <ServiceName>",
+      "risk": "MEDIUM",
+      "requires_admin": true
+    },
+    "RDP_SERVICEDLL_TAMPER": {
+      "summary": "TermService 的 ServiceDll 被篡改，RDP 服务启动时会加载攻击者 DLL（可窃取登录凭据）。",
+      "expected": "ServiceDll = %SystemRoot%\\System32\\termsrv.dll",
+      "actual": "当前 TermService ServiceDll 见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TermService\\Parameters\" /v ServiceDll\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\TermService\\Parameters\" /v ServiceDll /t REG_EXPAND_SZ /d \"%SystemRoot%\\System32\\termsrv.dll\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "SIG_UNSIGNED": {
+      "summary": "可执行文件没有有效数字签名，来源不明。",
+      "expected": "文件由可信厂商签名（可用 Get-AuthenticodeSignature 验证）",
+      "actual": "签名状态见 evidence（status=unsigned）。",
+      "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "SIG_INVALID": {
+      "summary": "文件签名无效或内容被篡改（证书链失败 / 摘要不匹配）。",
+      "expected": "文件签名有效且与官方发布版本一致",
+      "actual": "签名状态见 evidence（status=invalid / error）。",
+      "command": "powershell -NoProfile -Command \"Get-AuthenticodeSignature -LiteralPath '<Path>' | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate; Get-FileHash -LiteralPath '<Path>' -Algorithm SHA256 | Format-List\"",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "LSA_PACKAGE_HIJACK": {
+      "summary": "LSA Notification Packages 被加入非系统 DLL，登录/密码变更事件会加载该 DLL 窃取凭据。",
+      "expected": "Notification Packages = scecli",
+      "actual": "当前 Notification Packages（REG_MULTI_SZ）见 evidence。",
+      "command": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v \"Notification Packages\"\nreg add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\" /v \"Notification Packages\" /t REG_MULTI_SZ /d \"scecli\" /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "RUN_REGISTRY": {
+      "summary": "注册表 Run/RunOnce 中存在可疑自启动项。",
+      "expected": "Run / RunOnce 仅包含已知可信程序",
+      "actual": "可疑启动项的值名与命令见 evidence。",
+      "command": "reg query \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\"\nreg query \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\"\n# 删除可疑值（把 <ValueName> 换成实际值名；HKLM 下的同名键需要管理员权限）：\nreg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v \"<ValueName>\" /f\nreg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\"",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "LSA_APPINIT": {
+      "summary": "AppInit_DLLs 被设置为非空/非系统 DLL，会注入到所有加载 user32.dll 的进程。",
+      "expected": "AppInit_DLLs = 空；LoadAppInit_DLLs = 0",
+      "actual": "当前 AppInit_DLLs / LoadAppInit_DLLs 见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows\" /v AppInit_DLLs\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows\" /v AppInit_DLLs /t REG_SZ /d \"\" /f\nreg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows\" /v LoadAppInit_DLLs /t REG_DWORD /d 0 /f\nreg add \"HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows\" /v AppInit_DLLs /t REG_SZ /d \"\" /f\nreg add \"HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows\" /v LoadAppInit_DLLs /t REG_DWORD /d 0 /f",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "SIG_PATH_MASQUERADE": {
+      "summary": "非微软签名的文件位于 System32/SysWOW64，疑似路径伪装。",
+      "expected": "System32 / SysWOW64 下的可执行文件应来自微软或经确认的可信厂商",
+      "actual": "签名者与路径见 evidence。",
+      "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Length, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "AUTORUNS_USERWRITABLE": {
+      "summary": "自启动项位于用户可写目录，普通用户可替换该文件实现持久化。",
+      "expected": "自启动程序位于受保护目录（Program Files / System32），且签名可信",
+      "actual": "自启动路径及可写性见 evidence。",
+      "command": "powershell -NoProfile -Command \"$p='<Path>'; Get-Item -LiteralPath $p | Format-List FullName, Attributes, LastWriteTime; Get-AuthenticodeSignature -LiteralPath $p | Format-List Status, SignerCertificate\"\n# 确认为恶意后删除该自启动项并按需隔离/删除对应文件",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "DEFENDER_EXCLUSION": {
+      "summary": "Microsoft Defender 排除项被添加，攻击者可借此让恶意文件不被扫描/查杀。",
+      "expected": "ExclusionPath / ExclusionProcess / ExclusionExtension 中无可疑项",
+      "actual": "可疑排除项见 evidence。",
+      "command": "powershell -NoProfile -Command \"Get-MpPreference | Format-List ExclusionPath, ExclusionProcess, ExclusionExtension\"\n# 删除可疑排除项（把 <Path> / <Process> / <Extension> 换成实际值）：\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionPath '<Path>'\"\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionProcess '<Process>'\"\npowershell -NoProfile -Command \"Remove-MpPreference -ExclusionExtension '<Extension>'\"",
+      "risk": "HIGH",
+      "requires_admin": true
+    },
+    "EXT_PERM_HIGH": {
+      "summary": "浏览器扩展申请了高风险权限（如读取所有网站数据、修改系统设置）。",
+      "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+      "actual": "扩展名称、ID 与权限见 evidence。",
+      "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+      "risk": "HIGH",
+      "requires_admin": false
+    },
+    "EXT_PERM_MED": {
+      "summary": "浏览器扩展申请了中等风险权限，存在读取浏览数据或注入页面的可能。",
+      "expected": "仅保留可信来源、权限与用途相符的浏览器扩展",
+      "actual": "扩展名称、ID 与权限见 evidence。",
+      "command": "start msedge \"edge://extensions\"\nstart chrome \"chrome://extensions\"\n# 在扩展管理页中核对并移除来源不明或权限过大的扩展（扩展 ID 见 evidence）",
+      "risk": "MEDIUM",
+      "requires_admin": false
+    },
+    "COM_HIJACK_LOW": {
+      "summary": "COM 组件的 InprocServer32 指向非系统路径，可能被用于持久化或劫持。",
+      "expected": "InprocServer32 默认值指向系统/官方组件的 DLL（如 %SystemRoot%\\System32\\...）",
+      "actual": "CLSID 与当前 InprocServer32 见 evidence。",
+      "command": "reg query \"HKLM\\SOFTWARE\\Classes\\CLSID\\<CLSID>\\InprocServer32\" /ve\nreg query \"HKLM\\SOFTWARE\\Classes\\WOW6432Node\\CLSID\\<CLSID>\\InprocServer32\" /ve\n# 备份后再恢复/删除可疑键（把 <CLSID> 换成实际值）：\nreg export \"HKLM\\SOFTWARE\\Classes\\CLSID\\<CLSID>\" \"%USERPROFILE%\\Desktop\\clsid_backup.reg\"",
+      "risk": "MEDIUM",
+      "requires_admin": true
+    }
+  }
+}
