@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TamperScan 扫描报告 - 2026-11-11T00:00:00+00:00</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1f2328; --muted: #57606a;
+    --border: #d0d7de;
+    --high: #b42318; --high-bg: #fde8e8;
+    --medium: #b54708; --medium-bg: #fdf0e1;
+    --low: #8a6d00; --low-bg: #fdf7d8;
+    --info: #0b5cad; --info-bg: #e7f0fa;
+    --skipped: #57606a; --skipped-bg: #eef0f2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .page { max-width: 1100px; margin: 0 auto; }
+  .page-header, section {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 22px; margin-bottom: 16px;
+  }
+  h1 { margin: 0 0 12px; font-size: 22px; }
+  h2 { margin: 0 0 12px; font-size: 17px; }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 18px; margin: 0; }
+  .meta div { margin: 0; }
+  .meta dt { color: var(--muted); font-size: 12px; }
+  .meta dd { margin: 0; word-break: break-all; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
+  th { background: #f0f3f6; }
+  .counts td, .counts th { text-align: center; font-weight: 600; }
+  .cell-HIGH { color: var(--high); background: var(--high-bg); }
+  .cell-MEDIUM { color: var(--medium); background: var(--medium-bg); }
+  .cell-LOW { color: var(--low); background: var(--low-bg); }
+  .cell-INFO { color: var(--info); background: var(--info-bg); }
+  .cell-SKIPPED { color: var(--skipped); background: var(--skipped-bg); }
+  .finding { border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; margin: 10px 0; background: #fff; }
+  .finding summary { cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .severity-border-HIGH, .sev-border-HIGH { border-left-color: var(--high); }
+  .severity-border-MEDIUM, .sev-border-MEDIUM { border-left-color: var(--medium); }
+  .severity-border-LOW, .sev-border-LOW { border-left-color: var(--low); }
+  .severity-border-INFO, .sev-border-INFO { border-left-color: var(--info); }
+  .severity-border-SKIPPED, .sev-border-SKIPPED { border-left-color: var(--skipped); }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge-HIGH { color: var(--high); background: var(--high-bg); }
+  .badge-MEDIUM { color: var(--medium); background: var(--medium-bg); }
+  .badge-LOW { color: var(--low); background: var(--low-bg); }
+  .badge-INFO { color: var(--info); background: var(--info-bg); }
+  .badge-SKIPPED { color: var(--skipped); background: var(--skipped-bg); }
+  .rule { font-weight: 600; }
+  .target { color: var(--muted); word-break: break-all; }
+  .detail { margin: 4px 14px 0; }
+  .evidence { margin: 8px 14px 12px; padding: 10px; background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 0; }
+  .remediation { margin: 0 14px 12px; padding: 10px 12px; background: #f0f7ff; border: 1px solid #b6d4f0; border-left: 4px solid var(--info); border-radius: 6px; }
+  .remediation-title { margin: 0 0 6px; font-size: 13px; color: var(--info); }
+  .remediation-meta { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 13px; }
+  .remediation-meta div { display: contents; }
+  .remediation-meta dt { color: var(--muted); }
+  .remediation-meta dd { margin: 0; word-break: break-all; }
+  .remediation-risk { font-weight: 600; }
+  .remediation-risk.risk-HIGH { color: var(--high); }
+  .remediation-risk.risk-MEDIUM { color: var(--medium); }
+  .remediation-risk.risk-LOW { color: var(--low); }
+  .remediation-hint { color: var(--muted); font-size: 11px; margin: 8px 0 4px; }
+  .remediation-command { background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
+  .empty { color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 24px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <h1>TamperScan 扫描报告</h1>
+    <dl class="meta">
+      <div><dt>生成时间</dt><dd>2026-11-11T00:00:00+00:00</dd></div>
+      <div><dt>主机</dt><dd>MSI（Windows-10-10.0.26300-SP0，标准用户）</dd></div>
+      <div><dt>工具版本</dt><dd>TamperScan 1.5.0</dd></div>
+      <div><dt>扫描耗时</dt><dd>0.00 秒</dd></div>
+      <div><dt>扫描模块</dt><dd>0/0 可用</dd></div>
+      <div><dt>退出码</dt><dd>2（HIGH=2，MEDIUM=1，其余 0）</dd></div>
+    </dl>
+  </header>
+
+  <section class="summary">
+    <h2>严重等级统计</h2>
+    <table class="counts">
+      <thead>
+        <tr>
+<th class="cell-HIGH">高危</th><th class="cell-MEDIUM">中危</th><th class="cell-LOW">低危</th><th class="cell-INFO">信息</th><th class="cell-SKIPPED">跳过</th>          <th>合计</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+<td class="cell-HIGH">1</td><td class="cell-MEDIUM">0</td><td class="cell-LOW">0</td><td class="cell-INFO">0</td><td class="cell-SKIPPED">0</td>          <td>1</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+
+
+
+  <section class="findings">
+    <h2>Finding 明细（1）</h2>
+    <details class="finding sev-border-HIGH" open>
+      <summary>
+        <span class="badge badge-HIGH">HIGH</span>
+        <span class="diff-badge diff-badge-MODIFIED diff-status-MODIFIED">MODIFIED</span>
+        <span class="rule">TEST_RULE</span>
+        <span class="target">C:\Test\target.exe</span>
+      </summary>
+      <p class="diff-banner diff-banner-MODIFIED">⚠️ 此项目与基线相比发生变化（MODIFIED）</p>
+      <p class="detail">非 BENIGN 文案回归样本</p>
+      <pre class="evidence">{
+  &#34;actual&#34;: &#34;value&#34;,
+  &#34;merged_rules&#34;: [
+    &#34;TEST_RULE&#34;
+  ]
+}</pre>
+    </details>
+  </section>
+
+  <footer>
+    <p>本报告为单文件自包含 HTML（内联 CSS、无外部资源）。Finding 内容可能包含攻击者可控字符串，已由模板自动做 HTML 转义。</p>
+  </footer>
+</div>
+</body>
+</html>
