@@ -359,7 +359,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       {% endif %}
       <p class="detail">{{ finding.detail }}</p>
       {% if finding.diff_status == benign_update_status %}
+      {% if finding.evidence.recent_system_update %}
+      <p class="diff-note diff-note-BENIGN_UPDATE">系统更新时间窗内变更（BENIGN_UPDATE）</p>
+      {% elif finding.evidence.version_bump %}
       <p class="diff-note diff-note-BENIGN_UPDATE">版本正常前进（自动更新）</p>
+      {% else %}
+      <p class="diff-note diff-note-BENIGN_UPDATE">良性更新（BENIGN_UPDATE）</p>
+      {% endif %}
       {% endif %}
       <pre class="evidence">{{ finding.evidence_json }}</pre>
       {% if finding.remediation %}
@@ -900,10 +906,13 @@ def _fallback_finding_diff(finding: dict[str, Any]) -> tuple[str, str, str]:
     safe_status = escape(status)
     resolved_class = " is-resolved" if status == baseline.DIFF_RESOLVED else ""
     badge = f'<span class="diff-badge diff-badge-{safe_status} diff-status-{safe_status}">{safe_status}</span>'
+    evidence = finding.get("evidence")
     if status == DIFF_BENIGN_UPDATE:
+        if isinstance(evidence, dict) and evidence.get("recent_system_update"):
+            banner = '<p class="diff-banner diff-banner-version-bump">系统更新时间窗内变更（BENIGN_UPDATE）</p>'
+            return resolved_class, badge, banner
         return resolved_class, badge, ""
     banner = f'<p class="diff-banner diff-banner-{safe_status}">⚠️ 此项目与基线相比发生变化（{safe_status}）</p>'
-    evidence = finding.get("evidence")
     version_bump = bool(evidence.get("version_bump")) if isinstance(evidence, dict) else False
     if status == "MODIFIED" and version_bump:
         banner = '<p class="diff-banner diff-banner-version-bump">版本正常前进（已降级为 MEDIUM）</p>'
@@ -911,10 +920,15 @@ def _fallback_finding_diff(finding: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def _fallback_finding_note(finding: dict[str, Any]) -> str:
-    """兜底渲染里 BENIGN_UPDATE 的「版本正常前进（自动更新）」说明。"""
+    """兜底渲染里 BENIGN_UPDATE 的中性说明：C2 时间窗优先，其次版本前进。"""
     if str(finding.get("diff_status") or "") != DIFF_BENIGN_UPDATE:
         return ""
-    return '<p class="diff-note diff-note-BENIGN_UPDATE">版本正常前进（自动更新）</p>'
+    evidence = finding.get("evidence")
+    if isinstance(evidence, dict) and evidence.get("recent_system_update"):
+        return '<p class="diff-note diff-note-BENIGN_UPDATE">系统更新时间窗内变更（BENIGN_UPDATE）</p>'
+    if isinstance(evidence, dict) and evidence.get("version_bump"):
+        return '<p class="diff-note diff-note-BENIGN_UPDATE">版本正常前进（自动更新）</p>'
+    return '<p class="diff-note diff-note-BENIGN_UPDATE">良性更新（BENIGN_UPDATE）</p>'
 
 
 def _fallback_campaigns_html(report: dict[str, Any]) -> str:

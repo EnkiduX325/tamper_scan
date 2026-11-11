@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/EnkiduX325/tamper_scan/actions/workflows/ci.yml/badge.svg)](https://github.com/EnkiduX325/tamper_scan/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](CHANGELOG.md)
 
 > ⚖️ **双轨授权**：开源使用遵循 **AGPL-3.0**（个人使用、内部安全评估等免费）；闭源商业集成、随商业产品分发或需免除 AGPL 源码开放义务时，须购买商业授权（见 [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)）。贡献者请阅读 [CLA.md](CLA.md)。
 
@@ -9,13 +10,21 @@
 
 > ⚠️ 免责声明：本工具仅用于个人设备或已获得明确授权的安全评估。请勿用于未经授权的扫描。使用者应遵守当地法律法规，作者不对滥用行为承担责任。
 
-![TamperScan 图形界面：扫描结果与详情面板](docs/screenshots/gui_results.png)
+![TamperScan 1.5 PyQt6 浅色主题](docs/screenshots/gui_qt_light.png)
 
-- 版本：`1.4.0`（唯一来源：[core/version.py](core/version.py)）
-- **V1.4 更新（2026-11-11）：信任边界、基线归一化与攻击链关联**：
+![TamperScan 1.5 PyQt6 暗黑主题](docs/screenshots/gui_qt_dark.png)
+
+- 版本：`1.5.0`（唯一来源：[core/version.py](core/version.py)）
+- **V1.5 更新（2026-11-11）：PyQt6 商业级 UI + 多层级误报治理 + 弱网非阻塞交互**：
+  - **PyQt6 全量重构**：物理删除 Tkinter `gui.py`，新增 [gui_qt.py](gui_qt.py) 作为唯一 GUI 入口（`python main.py --gui`）：无边框窗口 + 自定义拖拽 + QGraphicsDropShadowEffect、浅色/暗黑 QSS 双主题、5 张圆角统计卡、QPainter 自绘环形进度、自定义横幅结果列表、右侧 evidence 详情面板；
+  - **绝不阻塞**：扫描与更新检查全部在 `QThread` 中执行并通过 `pyqtSignal` 回主线程；扫描异常弹窗兜底、支持取消；启动 5 秒后静默检查更新（3 秒超时 + HTTPS + 单调时钟截止时间）；
+  - **误报治理闭环**：联合指纹白名单（`rule_id + signer_contains + target_prefix`，默认 90 天到期自动失效）、系统更新 1 小时时间窗 `BENIGN_UPDATE`、攻击链反模式库扩充至 5 条；
+  - **信任与弱网**：GUI「信任此项」写入用户 `config.json` 并可匿名上报（用户名/完整路径脱敏后进入本地 `pending_report` 队列，恢复网络后发送）；
+  - **测试**：**1102 条**（含 PyQt6 offscreen GUI 测试与 C2/C3 回归），`python -m pytest -q -W error` 全绿。
+- **V1.4 更新（2026-11-11，历史）：信任边界、基线归一化与攻击链关联**：
   - **autorunsc64 信任边界**：执行 Sysinternals `autorunsc64.exe` 前强制校验微软签名（可选 SHA256 白名单），不可信则 `SKIPPED / AUTORUNS_UNTRUSTED_BINARY`，**绝不执行不可信二进制**；
   - **基线引擎增强**：`normalize_target` 严格归一化（环境变量展开、`\\?\` 长路径前缀、Sysnative 映射、8.3 短名解析、大小写/尾随空格），索引写入 `normalized_key`；对比状态扩展为七种（新增 `BENIGN_UPDATE`），支持良性版本前进豁免 `--treat-version-bump-as-benign`；
-  - **攻击链关联**：新增 `rules/attack_chain.json`（固定剧本 + 反模式）与 [core/correlator.py](core/correlator.py)，CLI 提供 `--campaign` / `--campaign-shadow` / `--fail-on-campaign high`；HTML 增加纯 CSS 攻击链时间线，GUI 新增攻击链视图；反模式自动抑制误报，**绝无自由组合**；
+  - **攻击链关联**：新增 `rules/attack_chain.json`（固定剧本 + 反模式）与 [core/correlator.py](core/correlator.py)，CLI 提供 `--campaign` / `--campaign-shadow` / `--fail-on-campaign high`；HTML 增加纯 CSS 攻击链时间线（V1.4 Tkinter GUI 曾提供攻击链视图，V1.5 已随 GUI 重构暂由 HTML/CLI 呈现）；反模式自动抑制误报，**绝无自由组合**；
   - **CLI 容错**：新增 `--fail-on-skipped`（存在 SKIPPED 时退出码 `3`）、`--save-baseline`/`--baseline` 互斥、基线未含哈希时的 WARN、`--quiet` 下 SKIPPED WARN；
   - **core 拆分**：[core/utils.py](core/utils.py) 拆分为 `core/paths.py` / `core/acl.py` / `core/subprocess_util.py` / `core/whitelist.py`，`core.utils` 保留向后兼容 shim；模块总数仍 **20**；
   - **协议双轨**：AGPL-3.0（个人/内部免费）+ 商业授权（闭源商用），新增 [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) 与 [CLA.md](CLA.md)，详见 [§11](#11-许可协议license)；
@@ -55,7 +64,8 @@
 
 ```bat
 dist\tamper_scan_gui.exe     :: 双击，或在命令行启动（无控制台窗口）
-python gui.py                :: 源码方式启动
+python main.py --gui         :: 源码方式启动（PyQt6）
+python gui_qt.py             :: 等价的直接启动
 ```
 
 界面操作：点击「开始扫描」→ 查看左侧结果列表与右侧详情 → 点击「导出报告」保存 HTML/JSON。
@@ -84,11 +94,11 @@ dist\tamper_scan.exe --scan --quiet --fail-on-skipped
 ```bat
 python -m pip install -r requirements.txt
 python main.py --scan        :: CLI
-python gui.py                :: GUI
+python main.py --gui         :: GUI（PyQt6）
 ```
 
 > `requirements.txt` 是运行依赖；打包 exe 另需 `python -m pip install -r requirements-build.txt`。
-> GUI 无新增依赖：`gui.py` 仅使用 Python 标准库 `tkinter` / `ttk`，`requirements.txt` 保持原样即可。
+> GUI 依赖 `PyQt6`（V1.5 起唯一界面）；打包 exe 另需 `python -m pip install -r requirements-build.txt`。
 > `skrapa` 为可选依赖（缺失时内存扫描返回 `SKIPPED / MEMORY_SKIPPED`），默认在 `requirements.txt` 中注释，需要内存扫描时自行 `pip install skrapa`。
 
  以管理员身份运行可得到完整结果
@@ -114,18 +124,20 @@ python gui.py                :: GUI
 
  2. 图形界面（GUI）
 
-`gui.py` 是 tkinter + ttk 实现的 Windows 11 Fluent 风格界面（浅灰背景、白色卡片、强调色 `0067C0`、Segoe UI），扫描核心与 CLI 完全复用 [core/scanner.py](core/scanner.py)，因此两种形态的模块顺序、白名单、去重排序、异常降级结果完全一致。
+V1.5 起 GUI 使用 **PyQt6** 全量重写（[gui_qt.py](gui_qt.py)），旧 Tkinter `gui.py` 已物理删除；扫描核心与 CLI 完全复用 [core/scanner.py](core/scanner.py)，因此两种形态的模块顺序、白名单、去重排序、异常降级结果完全一致。界面支持浅色/暗黑双主题（QSS）、无边框拖拽与阴影，扫描/更新检查全部在后台 `QThread` 执行，主线程永不阻塞。
+
+启动方式：`python main.py --gui`、`python gui_qt.py`，或双击 `dist\tamper_scan_gui.exe`。
 
  2.1 两种形态对比
 
 | 维度 | GUI 版 `tamper_scan_gui.exe` | CLI 版 `tamper_scan.exe` |
 |---|---|---|
-| 启动方式 | 双击即用（`--windowed`，无控制台窗口） | 终端 / 计划任务 / CI 脚本 |
-| 结果展示 | 五色统计卡片 + 结果表格 + 详情面板 + 进度条 | 控制台逐条打印 + JSON/HTML 报告文件 |
+| 启动方式 | 双击即用（`--windowed`，无控制台窗口）；也可 `--gui` | 终端 / 计划任务 / CI 脚本 |
+| 结果展示 | 5 张彩色统计卡 + 横幅结果列表 + 详情面板 + 环形进度 | 控制台逐条打印 + JSON/HTML 报告文件 |
 | 自动化 | 不适合（交互式） | 适合：`--quiet` + 退出码 `2/1/0` |
-| 报告导出 | 界面按钮导出 HTML/JSON（文件对话框） | `--format json\|html\|both --output PATH` |
-| 基线对比 | 「对比基线」/「保存为基线」按钮；结果列表「状态」列；X 取消对比 | `--baseline` / `--save-baseline` / `--fail-on-new` / `--hash-targets`（见 [§3.1](#31-基线对比v14)） |
-| 攻击链关联 | 「攻击链」按钮打开攻击链视图；选中 campaign 联动主结果列表 | `--campaign` / `--campaign-shadow` / `--fail-on-campaign high`（见 [§3.2](#32-攻击链关联v14)） |
+| 报告导出 | V1.5 暂未内置导出按钮（可用 CLI 的 `--format` 生成） | `--format json\|html\|both --output PATH` |
+| 基线对比 | 「对比基线」/「保存为基线」按钮；结果行显示 NEW/MODIFIED 等状态 | `--baseline` / `--save-baseline` / `--fail-on-new` / `--hash-targets`（见 [§3.1](#31-基线对比v14)） |
+| 攻击链关联 | 暂由 CLI/HTML 报告呈现，GUI 后续版本接入 | `--campaign` / `--campaign-shadow` / `--fail-on-campaign high`（见 [§3.2](#32-攻击链关联v14)） |
 | 典型用户 | 普通用户日常巡检、人工确认 | 运维/安全团队批量调度 |
 | 权限完整度 | 取决于是否以管理员身份运行（见 2.2） | 同左 |
 
@@ -143,17 +155,18 @@ python gui.py                :: GUI
 | 计划任务隐藏检测 | `TASK_HIDDEN_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | `Schedule\TaskCache\Tree` 键需要管理员 |
 | WFP 持久化过滤器 | `WFP_ACCESS_DENIED` | 灰色 `SKIPPED` 行 | `BFE\Parameters\Policy` 键需要管理员 |
 
-> 这不是报错，也不是“安全”：`SKIPPED` 是权限不足时的安全降级——扫描器明确告诉你“这一项没有检查”，而不是把未检查项当作干净。灰色统计卡片/灰色结果行就是为此设计的提示，导出报告时会原样保留（HTML 报告同样按灰色展示）。
+> 顶部权限徽章会显示当前是「管理员」还是「标准用户」；`SKIPPED` 是权限不足时的安全降级——扫描器明确告诉你「这一项没有检查」，而不是把未检查项当作干净。
 
  2.3 界面功能速览
 
-- 五色统计卡片（顶部）：HIGH 红、MEDIUM 橙、LOW 黄、INFO 蓝、SKIPPED 灰，数字为本次扫描各等级结果数；SKIPPED 卡片 > 0 时提示存在未检查项。启用基线对比时按“排除 `RESOLVED` 的当前结果”重算。
-- 左侧结果列表：按严重等级排序，行文字与等级同色；列为「等级 / 类别 / 目标 / 摘要」，启用基线对比时额外显示「状态」列，点击任意行在右侧查看完整详情。
-- 右侧详情面板：等级徽章、规则编号、类别、`target`、`detail`，以及可滚动的结构化 `evidence`（签名结果、PE 元数据、命中规则、攻击链等原始证据），便于人工确认。
-- 工具栏：「开始扫描」在扫描期间禁用并显示实时进度与当前模块名；V1.3 新增「对比基线」「保存为基线」：保存为基线在无扫描结果时提示先扫描，对比基线用文件对话框选择基线 JSON，加载后显示「对比基线: <文件名>」与小 X 取消（取消后列表恢复原始状态）；V1.4 新增「攻击链」按钮：扫描后打开攻击链视图（campaign 列表 + 步骤时间线），选中 campaign 会联动主结果列表定位关联 Finding；「导出报告」复用 [reporter.py](reporter.py) 生成自包含 HTML 或 JSON（原生保存对话框，取消不会报错）。
-- 底部状态栏：当前状态、可用模块数、结果数、耗时；扫描在后台线程执行，界面全程可响应、不“未响应”。
-
-![扫描进行中：进度条与模块提示](docs/screenshots/gui_scanning.png)
+- **顶部栏**：Logo + `TamperScan v1.5.0`、当前权限圆角徽章、设置齿轮、最小化/关闭；整条标题栏支持鼠标拖拽移动（无边框窗口 + 四周阴影）。
+- **统计卡**：HIGH 红 / MEDIUM 橙 / LOW 黄 / INFO 蓝 / SKIPPED 灰，大号加粗数字；扫描/基线对比后实时刷新。
+- **控制栏**：大号「开始扫描」按钮（扫描中变为「取消扫描」）、QPainter 自绘环形进度条、扫描状态与模块进度、「对比基线」「保存为基线」。
+- **结果列表**：`QListWidget` 自定义横幅行——左侧 4px 等级色块、`NEW`/`MODIFIED`/`BENIGN_UPDATE`/`RESOLVED` 状态、等级 chip、规则号、target 与摘要；点击行联动右侧详情。
+- **详情面板**：完整 `target`（长路径自动折行）、等级/状态/规则、等宽字体格式化 `evidence` JSON；底部「复制详情」「信任此项」；RESOLVED 项自动禁用信任。
+- **信任闭环**：「信任此项」生成联合指纹写入用户 `config.json`，并询问是否匿名上报；选择上报时自动脱敏（用户名/完整路径/原始文件均不上传）并写入本地待上报队列。
+- **设置中心**：启动时自动检查更新、浅色/暗黑主题切换、清空本地信任名单、查看待上报队列。
+- **弱网更新**：启动 5 秒后后台检查 GitHub latest release（3 秒超时）；发现新版本弹出精美更新对话框（前往下载 / 暂不更新 24h / 不再提示）；断网/超时只在状态栏静默提示，绝不影响本地扫描。
 
  2.4 打包指南
 
@@ -161,20 +174,21 @@ python gui.py                :: GUI
 
 | 产物 | 子系统 | 说明 |
 |---|---|---|
-| `dist\tamper_scan.exe` | CONSOLE | CLI，保留控制台输出与退出码 |
-| `dist\tamper_scan_gui.exe` | WINDOWS_GUI | GUI，基于 `gui.py`，双击不弹控制台 |
+| `dist\tamper_scan.exe` | CONSOLE | CLI，保留控制台输出与退出码；**不打包 PyQt6**，体积小、可独立运行 |
+| `dist\tamper_scan_gui.exe` | WINDOWS_GUI | PyQt6 GUI（`gui_qt.py`），双击不弹控制台，约 60-90MB（取决于 PyQt6 版本与 collect-all 范围） |
 
 ```bat
-:: 1) 安装构建依赖（仅构建时需要 PyInstaller）
+:: 1) 安装构建依赖（仅构建时需要 PyInstaller；运行依赖含 PyQt6）
 python -m pip install -r requirements-build.txt
 
 :: 2) 一键打包两个 exe
 build.bat
 ```
 
-- 两个 exe 共享同一套打包参数：`--add-data "rules;rules" --add-data "tools;tools"`、`--collect-submodules modules`、`--collect-binaries yara`、`--hidden-import skrapa.windows / win32com.client / pythoncom / pywintypes`（漏掉任何一个都会让 GUI exe 在扫描时静默失败）；
-- GUI 仅额外增加 `--windowed`（并改 `--name tamper_scan_gui`）：它让进程使用 Windows GUI 子系统，双击不闪控制台；
-- GUI 内部调用 `autorunsc64.exe` / `powershell.exe` 时统一使用 `CREATE_NO_WINDOW` + `SW_HIDE`（`core/utils.py::hidden_process_options` 集中处理），扫描时不会闪黑框；
+- 两个 exe 共享同一套基础参数：`--add-data "rules;rules" --add-data "tools;tools"`、`--collect-submodules modules`、`--collect-binaries yara`、`--hidden-import skrapa.windows / win32com.client / pythoncom / pywintypes`；
+- **PyQt6 GUI** 额外使用 `--collect-all PyQt6`、`--collect-submodules PyQt6`、`--hidden-import PyQt6.QtCore / QtGui / QtWidgets`；若环境可导入 `PyQt6.Qt6` 还会追加 `--collect-all PyQt6.Qt6`。PyInstaller 的 PyQt6 hook 会把 `platforms/qwindows.dll`、styles、imageformats、translations 等 Qt 插件一并收集（缺失时 exe 双击会报 “could not find or load the Qt platform plugin windows”）；
+- GUI 仅额外增加 `--windowed`（并改 `--name tamper_scan_gui`）：进程使用 Windows GUI 子系统，双击不闪控制台；
+- GUI 内部调用 `autorunsc64.exe` / `powershell.exe` 时统一使用 `CREATE_NO_WINDOW` + `SW_HIDE`（`core/subprocess_util.py`），扫描时不会闪黑框；
 - 若存在 `icon.ico`，`build.bat` 会自动加 `--icon icon.ico` 嵌入盾牌图标；
 - `tools/autorunsc64.exe` 不随仓库分发（[Sysinternals 许可说明](https://learn.microsoft.com/en-us/sysinternals/license-faq)）；本地构建前请按 [tools/README.txt](tools/README.txt) 从微软官方下载，或直接使用无 Autoruns 的降级模式；
 - 打包细节（onefile/`_MEIPASS`/模块收集）与测试局限见 [§8](8-构建与打包)。
@@ -186,6 +200,7 @@ build.bat
 | 参数 | 说明 |
 |---|---|
 | `--scan` | 执行一次完整扫描（不带 `--scan` 只打印帮助） |
+| `--gui` | 启动 PyQt6 图形界面（V1.5 新 GUI 入口；与 `--scan` 同时传时 GUI 优先） |
 | `--output PATH` | 报告输出路径（基名；传目录时写入该目录下 `tamper_scan_report`；自动补 `.json/.html`） |
 | `--format json\|html\|both` | 报告格式；不指定 `--output` 时写到当前目录 `tamper_scan_report.` |
 | `--no-memory` | 跳过进程内存扫描（`lolbin_process` 内存部分 → `MEMORY_SKIPPED`） |
@@ -203,7 +218,7 @@ build.bat
 | `--campaign` | V1.4：显式开启攻击链后处理，报告中输出 `campaigns` / `campaign_stats` |
 | `--campaign-shadow` | V1.4：攻击链影子模式，仍计算并记录 campaigns，但仅灰色标注、不告警（与 `--campaign` 互斥） |
 | `--fail-on-campaign {high}` | V1.4：存在 `confidence=="high"` 的攻击链时强制退出码 `2`（仅接受 `high`） |
-| `--version` | 打印版本（当前 `1.4.0`） |
+| `--version` | 打印版本（当前 `1.5.0`） |
 
 示例：
 
@@ -344,7 +359,7 @@ V1.4 强化了调度场景的容错与告警语义：
 ```json
 {
   "tool": "TamperScan",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "generated_at": "2026-11-11T00:00:00+00:00",
   "baseline": {"path": "C:\\baseline\\base.json", "generated_at": "2026-11-10T00:00:00+00:00"},
   "host": {"name": "TEST-PC", "os": "Windows-11-...", "is_admin": true, "user": "User"},
@@ -462,6 +477,9 @@ V1.4 强化了调度场景的容错与告警语义：
 15. autorunsc64 信任边界（V1.4）：`AUTORUNS_UNTRUSTED_BINARY` 表示微软签名校验 / SHA256 白名单未通过，Autoruns 广度采集被**主动跳过**（未检查 ≠ 安全）；如需审计该类环境，请从微软官方渠道获取二进制并核对 `rules/autoruns_trust.json` 中的 SHA256 白名单。该校验只证明“来源可信”，不能证明二进制无漏洞。
 16. 攻击链关联（V1.4）只识别 `rules/attack_chain.json` 中预定义剧本，未覆盖的合法/恶意组合不会成链（宁缺勿滥，避免自由组合误报）；启发式置信度与反模式抑制都可能漏报或误抑制，campaign 只能作为“调查线索”，不能替代人工分析。
 17. 良性版本前进豁免（`BENIGN_UPDATE` / 降级 MEDIUM）依赖“签名者一致 + 版本单调前进”，攻击者可伪造版本号，因此**不要作为免检依据**；`normalize_target` 的 8.3 短名解析依赖 Windows API，失败时保留原值（极端情况下同一目标可能无法匹配，表现为 NEW/RESOLVED）。
+18. **反模式签名约束缺失（V1.5 已知，V1.6 计划）**：`rules/attack_chain.json` 的 `anti_patterns` 当前只支持 `target_contains` 子串匹配，**不校验签名者/进程结构**；攻击者可构造同名进程或含 `svchost` 字样的目标“蹭抑制”。当前建议：对命中反模式而进入 `suppressed` 的 campaign 仍应人工复核。V1.6 将扩展 correlator schema，支持 `signer_contains` 等约束。
+19. **C2 时间窗蹭目录风险（V1.5 已知）**：系统更新时间窗容差依赖“文件位于 WinSxS/DriverStore/servicing/$WinREAgent/SoftwareDistribution + mtime 在基线生成后 1 小时内”，攻击者可伪造 mtime 或诱导文件落入这些目录，从而把 `MODIFIED` 降为 `BENIGN_UPDATE`；该降级不改变 Finding 是否上报，只影响 diff 状态展示。高价值系统文件仍应逐条复核。
+20. **匿名上报端点待配置（V1.5 已知）**：`REPORT_ENDPOINT = ""` 为占位，空串时只写入本地 `pending_report.json` 并提示“网络不佳，已暂存本地”；产品方填入端点后再接入 HTTP POST/重试，当前行为符合 V1.5 弱网设计，不是静默丢失。
 
 ---
 
@@ -510,10 +528,12 @@ build.bat
 | `--add-data "rules;rules"` / `"tools;tools"` | Windows 分隔符是 `;`；规则与外部工具一起打包（CLI/GUI 必须完全一致）。`tools/` 可能仅有 README（本仓库不提交 autorunsc64.exe），打包仍成功，运行时 Autoruns 模块 SKIPPED |
 | `--collect-submodules modules` | 20 个扫描模块是 `importlib` 动态导入，PyInstaller 静态分析发现不了 |
 | `--collect-binaries yara` | 打包 `libyara.dll` |
+| `--collect-all PyQt6`（仅 GUI） | 收集 PyQt6 包与 Qt6 运行库/插件；PyInstaller 的 PyQt6 hook 会带上 `platforms/qwindows.dll`、styles、imageformats、translations，缺少时 GUI exe 双击会报 Qt platform plugin 错误 |
+| `--collect-submodules PyQt6` / `--hidden-import PyQt6.QtCore / QtGui / QtWidgets`（仅 GUI） | 显式声明 GUI 用到的 Qt 子模块，提升跨机器打包稳定性；若 `PyQt6.Qt6` 可导入再追加 `--collect-all PyQt6.Qt6` |
 | `--hidden-import skrapa.windows` | skrapa 的 Windows 子模块动态加载；V1.4 起 `build.bat` 会检测 skrapa 是否安装，未安装时自动移除该 hidden-import 并输出 WARNING，避免打包失败 |
 | `--hidden-import win32com.client / pythoncom / pywintypes` | pywin32 的动态 COM 加载 |
-| `--windowed`（仅 GUI） | 使用 Windows GUI 子系统，双击不弹控制台；子进程统一 `CREATE_NO_WINDOW` 隐藏 |
-| `--icon icon.ico`（可选） | 存在时自动嵌入盾牌图标 |
+| `--windowed`（仅 GUI） | 使用 Windows GUI 子系统，双击不弹控制台；子进程统一 `CREATE_NO_WINDOW` 隐藏；CLI exe 不打包 PyQt6，保持小体积与独立运行 |
+| `--icon icon.ico`（可选） / `--add-data icon.ico;.` | 存在时嵌入 exe 图标，并把 ico 一并打包供运行时 `QIcon` 加载（任务栏/窗口图标） |
 | 不加 `--uac-admin` | 标准用户可运行；需要完整结果时由用户自行"以管理员身份运行" |
 
 > `tools/autorunsc64.exe` 不随仓库分发（[Sysinternals 许可说明](https://learn.microsoft.com/en-us/sysinternals/license-faq)）；本地构建前请按 [tools/README.txt](tools/README.txt) 从微软官方下载，或直接使用无 Autoruns 的降级模式。
@@ -523,14 +543,14 @@ build.bat
 
  8.1 本地一键校验与样例报告重生成
 
-V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.bat` 会随 `--add-data tools;tools` 一起打包，体积很小）。本地校验脚本在 V1.3 更名，V1.4 再次更名为 `tools/verify_v14.ps1`：
+V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.bat` 会随 `--add-data tools;tools` 一起打包，体积很小）。本地校验脚本随版本迭代更名，V1.5 为 `tools/verify_v15.ps1`：
 
 | 脚本 | 用途 | 用法 |
 |---|---|---|
-| `tools/verify_v14.ps1` | 本地一键复现 GitHub Actions：`compileall`（含 `tests/`）→ `pytest` → `ruff` → 版本号 / 模块数（20）/ 样例报告 / AGPL 与商业双轨文档断言 / **基线引擎（七状态 + normalize/BENIGN_UPDATE）自检** / **攻击链 correlator 自检** / CLI 参数断言；退出码 0 表示全部通过 | `powershell -ExecutionPolicy Bypass -File tools\verify_v14.ps1`（可加 `-SkipInstall` 跳过自动安装 pytest/ruff，`-RunFullScan` 额外跑一次真实扫描） |
+| `tools/verify_v15.ps1` | 本地一键复现 GitHub Actions：`compileall`（含 `tests/`）→ `pytest` → `ruff` → 版本号 / 模块数（20）/ 样例报告 / AGPL 与商业双轨文档断言 / **基线引擎（七状态 + normalize/BENIGN_UPDATE）自检** / **攻击链 correlator 自检** / CLI 参数断言；退出码 0 表示全部通过 | `powershell -ExecutionPolicy Bypass -File tools\verify_v15.ps1`（可加 `-SkipInstall` 跳过自动安装 pytest/ruff，`-RunFullScan` 额外跑一次真实扫描） |
 | `tools/regenerate_sample_report.py` | 重新生成并脱敏 `reports/sample_report.json/.html`：用户目录 → `C:\Users\User`、主机名 → `TEST-PC`、用户名/域 → `User`/`DOMAIN`，按 `MODULE_REGISTRY` 归一 20 个模块状态并挂载只读 `remediation` 字段，再用 `reporter.render_html()` 重渲染 HTML | 先 `python main.py --scan --format both --output reports\sample_report`，再 `python tools\regenerate_sample_report.py` |
 
-> 提交前建议固定执行一次 `powershell -ExecutionPolicy Bypass -File tools\verify_v14.ps1`，与 CI（Python 3.10 / 3.11 矩阵）完全一致。
+> 提交前建议固定执行一次 `powershell -ExecutionPolicy Bypass -File tools\verify_v15.ps1`，与 CI（Python 3.10 / 3.11 矩阵）完全一致。
 > 样例报告包含主机名/用户名/路径，**重新生成后必须运行脱敏脚本并检查 `git diff reports/`**，禁止提交真实个人数据。
 
 最小提交前工作流：
@@ -538,7 +558,7 @@ V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.b
 ```bat
 python -m pip install -r requirements.txt
 python -m pip install ruff pytest
-powershell -ExecutionPolicy Bypass -File tools\verify_v14.ps1
+powershell -ExecutionPolicy Bypass -File tools\verify_v15.ps1
 ```
 
 ---
@@ -548,9 +568,9 @@ powershell -ExecutionPolicy Bypass -File tools\verify_v14.ps1
 ```
 tamper_scan/
 ├── main.py                   CLI 入口：参数解析（含 V1.3 基线参数）、控制台输出、报告落盘、退出码
-├── gui.py                    GUI 入口：tkinter/ttk Fluent 界面，复用 core/scanner.py；V1.3 基线对比/保存
+├── gui_qt.py                 GUI 入口（V1.5）：PyQt6 无边框/QSS 双主题/QThread 扫描与更新/信任闭环/设置中心
 ├── reporter.py               JSON / 自包含 HTML 报告（Jinja2 autoescape；V1.3 基线 diff 挂载）
-├── requirements.txt          运行依赖（GUI 无需新增依赖，tkinter 为标准库）
+├── requirements.txt          运行依赖（含 PyQt6 / pytest-qt；GUI 为 PyQt6）
 ├── requirements-build.txt    打包依赖（含 -r requirements.txt + pyinstaller）
 ├── build.bat                 一键打包：CLI + GUI 两个 onefile exe
 ├── icon.ico                  exe 图标（存在时 build.bat 自动 --icon）
@@ -578,14 +598,17 @@ tamper_scan/
 │   ├── powershell_profile.py / com_hijack.py / lsa_appinit.py / persistence_ext.py
 │   ├── browser_ext.py / lolbin_process.py
 ├── tests/                    纯函数单元测试（不依赖管理员权限；`python -m pytest -q`）
-│   ├── test_baseline*.py     V1.3/V1.4 基线对比：引擎 / CLI / 报告 / GUI / normalize / BENIGN_UPDATE
+│   ├── test_baseline*.py     V1.3/V1.4/V1.5 基线对比：引擎 / CLI / 报告 / normalize / BENIGN_UPDATE / C2 时间窗
 │   ├── test_correlator.py    V1.4 攻击链关联引擎（固定剧本 / 反模式 / 图聚类）
 │   ├── test_autoruns_trust.py       V1.4 autorunsc64 信任边界
 │   ├── test_cli_v14.py              V1.4 CLI 容错与攻击链参数（互斥 / WARN / 退出码）
-│   └── test_reporter_v14.py / test_campaign_gui.py / test_core_split.py     V1.4 报告时间线 / GUI 纯函数 / core 拆分
+│   ├── test_gui_qt.py                  V1.5 PyQt6 GUI（offscreen 窗口/信号/信任闭环/设置）
+│   ├── test_baseline_recent_update.py  V1.5 C2 系统更新时间窗容错
+│   ├── test_attack_chain_anti_patterns.py V1.5 C3 反模式库
+│   └── test_reporter_v14.py / test_core_split.py     V1.4 报告时间线 / core 拆分
 ├── rules/                    规则与白名单（随 exe 打包，含 remediation.json / attack_chain.json / autoruns_trust.json）
 ├── tools/                    外部工具目录（不含 autorunsc64.exe；下载说明见 tools/README.txt）
-│   ├── verify_v14.ps1        本地复现 CI（compileall + pytest + ruff + 版本/模块数/样例报告/协议/基线/攻击链断言）
+│   ├── verify_v15.ps1        本地复现 CI（compileall + PyQt6 smoke + pytest + ruff + 版本/样例报告/协议/基线/攻击链断言）
 │   └── regenerate_sample_report.py  重新生成并脱敏演示报告（版本/20 模块归一 + remediation 挂载 + HTML 重渲染）
 ├── docs/screenshots/         界面截图（本 README 引用）
 └── reports/

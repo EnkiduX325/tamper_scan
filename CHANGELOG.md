@@ -12,6 +12,79 @@
 - 模块 2 后续增强：IPv6 远端地址（`FWP_BYTE_ARRAY16` 指针）解析与 NDR 布局跨版本兼容；
 - 模块 3 后续增强：RDP 配置类后门（`fDenyTSConnections` / 端口 / 影子会话等）。
 
+## [1.5.0] - 2026-11-11
+
+V1.5「体验与治理」：**PyQt6 商业级 UI 全量重构**（物理移除 Tkinter）、**多层级误报治理**
+（联合指纹白名单 / 系统更新时间窗容差 / 攻击链反模式扩充）与**弱网非阻塞交互**
+（3 秒静默更新检查、匿名上报本地暂存）。`core/scanner.py` **零改动**；`modules/*.py` 仅补充两处降噪过滤（Tarrask 系统任务、
+Chrome Active Setup），模块总数仍 **20**。
+
+### Added
+
+- **PyQt6 GUI（`gui_qt.py`）**：无边框窗口 + 自定义拖拽 + 四周阴影（`QGraphicsDropShadowEffect`）、
+  浅色/暗黑双 QSS 主题、5 张圆角统计卡、QPainter 自绘环形进度、自定义横幅结果列表
+  （等级色块 / NEW·MODIFIED·BENIGN_UPDATE·RESOLVED 状态）、右侧 evidence 详情面板；
+  `main.py --gui` 为唯一 GUI 入口。扫描与更新检查全部在 `QThread` 执行，`pyqtSignal`
+  回主线程；扫描异常弹窗兜底并支持协作式取消，主线程不阻塞。
+- **静默更新检查（`core/updater.py`）**：启动 5 秒后后台 GET GitHub latest release；
+  仅 HTTPS、socket 超时 ≤3 秒 + 响应体单调时钟截止时间防慢速滴流；支持「暂不更新
+  24h」「不再提示当前版本」；断网/超时/HTTP/JSON 异常全部静默降级，绝不影响本地扫描。
+- **用户级配置与信任库（`core/config.py`）**：`%APPDATA%\\TamperScan\\config.json`
+  原子读写、损坏/超深/超大输入容错；联合指纹信任名单、主题、更新偏好、待上报队列
+  （`pending_report.json`）。
+- **联合指纹白名单（`core/whitelist.py`）**：`rule_id + signer_contains + target_prefix`
+  同时命中才豁免；`expire_days` 到期自动失效（缺创建时间 fail closed）；拒绝盘符根 /
+  注册表根 / `C:...` 等过宽前缀；用户信任项由 `load_whitelist()` 合并，无需修改只读规则文件；
+  GUI「信任此项」生成同格式 JSON。
+- **系统更新时间窗容差（`core/baseline.py`）**：哈希变化且签名一致、版本未回退、文件 mtime
+  在基线生成后 1 小时内且位于 WinSxS / DriverStore / servicing / $WinREAgent /
+  SoftwareDistribution 时，降级为 `BENIGN_UPDATE`（完全静默）；新增
+  `DiffEntry.recent_system_update` 与 evidence 标记。
+- **攻击链反模式库扩充（`rules/attack_chain.json`）**：新增微软签名 svchost → cmd/powershell、
+  Edge/Chrome 自动更新器目录、Windows 更新目录噪声 3 条反模式，命中即 `suppressed`。
+- **系统级误报降噪（V1.5 发布前）**：`modules/scheduled_task_hidden.py` 对
+  `Microsoft\Windows\` 下 Index=0 且无 Tasks 定义的系统任务降为 INFO；
+  `modules/persistence_ext.py` 对 Google 签名 + Chrome 官方 Application 目录的
+  Active Setup StubPath 降为 INFO；`rules/whitelist.json` 新增 15 条联合指纹
+  （7-Zip/NeatDM/LinkedIn 无签名官方目录、Quark Alibaba 签名目录、Chrome/Edge
+  Active Setup 目录），均限定规则 + 精确安装目录（+签名者），不使用整目录放行。
+- **全量无边框 Dialog**：`SettingsDialog` / `UpdateDialog` 统一继承 `FramelessDialog`
+  （圆角卡片 + 阴影 + 自定义标题栏/拖拽/图标），新增 `test_all_dialogs_are_frameless`
+  遍历全部 QDialog 子类防止回归；新增 `FluentMessageBox` 替换全部原生
+  `QMessageBox`（information/warning/critical/question，question 提供是/否按钮）；
+  新增 `docs/screenshots/gui_qt_settings.png`、`gui_qt_update.png`、
+  `gui_qt_campaign.png`、`gui_qt_remediation.png`、`gui_qt_messagebox.png`。
+
+### Changed
+
+- `main.py --gui` 指向 `gui_qt.py`（CLI 路径延迟导入，不加载 PyQt6）。
+- `requirements.txt` 增加 `PyQt6` 与 `pytest-qt`；`build.bat` GUI 构建切换 `gui_qt.py`，
+  增加 `--collect-all PyQt6` / PyQt6 hidden imports / 条件 `--collect-all PyQt6.Qt6`，
+  CLI exe 仍独立、不打包 PyQt6。
+- CI：`compileall` 切换到 `gui_qt.py`，新增 PyQt6 offscreen GUI smoke；版本与样例报告
+  断言升级至 `1.5.0`。
+- README 全面焕新（PyQt6 明暗双主题截图、三大卖点、1.5.0 徽章、AGPL-3.0 + 商业双轨
+  声明保持置顶）；新增 `docs/screenshots/gui_qt_light.png` / `gui_qt_dark.png`。
+- 样例报告 `reports/sample_report.json/.html` 重新扫描、脱敏并升级至 1.5.0。
+
+### Removed
+
+- 物理删除 Tkinter 入口 `gui.py` 及其专属测试 `tests/test_baseline_gui.py` /
+  `tests/test_campaign_gui.py`；`gui_qt.py` 为唯一 GUI 入口。
+
+### Tests
+
+- 全量测试保持 **1102 条**并通过 `python -m pytest -q -W error`（零警告）；
+  `python -m ruff check .` 通过。新增：PyQt6 GUI offscreen 测试、C2 时间窗容错、
+  C3 反模式库、版本/打包/CI/文档一致性检查。
+
+### Known limitations (V1.5)
+
+- **反模式签名约束缺失**：`anti_patterns` 仅 `target_contains` 子串匹配，不校验签名；命中抑制的 campaign 仍需人工复核，V1.6 扩展 schema。
+- **C2 时间窗蹭目录风险**：攻击者可伪造 mtime 或把文件放入系统更新目录，使 diff 状态降为 `BENIGN_UPDATE`；Finding 仍会上报，不改变是否检测，但状态展示可用作掩护。
+- **匿名上报端点待配置**：当前仅本地 `pending_report.json` 暂存 + 导出，未接入真实 POST/重试；产品方配置端点后启用。
+- **攻击链 UI 不含 V1.4 的选中联动高亮**：V1.5 rc2 已恢复攻击链按钮/列表/步骤对话框，联动高亮按计划留到 V1.6。
+
 ## [1.4.0] - 2026-11-11
 
 V1.4「信任边界、基线归一化与攻击链关联」：模块总数仍 **20**；新增 autorunsc64 微软签名信任边界、

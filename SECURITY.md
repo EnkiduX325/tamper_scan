@@ -29,7 +29,7 @@ TamperScan 是一个**本地运行的 Windows 防篡改扫描器**：不联网�
 
 **在范围内**：
 
-- `core/`、`modules/`、`main.py`、`gui.py`、`reporter.py` 自身的缺陷；
+- `core/`、`modules/`、`main.py`、`gui_qt.py`、`reporter.py` 自身的缺陷；
 - 恶意构造的扫描目标（文件路径、注册表值、浏览器扩展 manifest、YARA 规则）导致的崩溃或越权；
 - HTML/JSON 报告中的注入/转义问题。
 

@@ -1,6 +1,6 @@
 # TamperScan 商业授权说明（Commercial License）
 
-> 文档版本：1.0（2026-11-11，对应 TamperScan v1.4.0）
+> 文档版本：1.0（2026-11-11，对应 TamperScan v1.5.0）
 
 TamperScan 采用双轨制授权（dual licensing）：
 

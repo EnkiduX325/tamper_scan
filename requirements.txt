@@ -4,5 +4,9 @@ pefile>=2023.2.7
 pywin32>=306
 yara-python>=4.5
 jinja2>=3.1
+# V1.5：PyQt6 是唯一 GUI 运行时（无边框窗口 / QSS 双主题 / QThread 异步扫描）
+PyQt6>=6.6
+# V1.5：GUI 自动化测试（tests/test_gui_qt.py；CI 使用 offscreen 平台）
+pytest-qt>=4.4
 # 可选：进程内存扫描（缺失时 memory 相关检查降级为 SKIPPED / MEMORY_SKIPPED）
 # skrapa>=1.0

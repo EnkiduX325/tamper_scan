@@ -393,6 +393,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--scan", action="store_true", help="执行一次完整扫描")
     parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="启动 PyQt6 图形界面（V1.5 新 GUI 入口；与 --scan 同时传时 GUI 优先）",
+    )
+    parser.add_argument(
         "--module",
         action="append",
         metavar="NAME",
@@ -479,6 +484,11 @@ def main(argv: list[str] | None = None) -> int:
     setup_console()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.gui:
+        # 延迟导入：CLI 路径（导入/测试/打包）不加载 PyQt6；只有 --gui 才进入 GUI。
+        from gui_qt import main as gui_main
+
+        return int(gui_main())
     if args.list_modules:
         return cmd_list_modules()
     if not args.scan:

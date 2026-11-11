@@ -29,10 +29,10 @@ python main.py --scan --module network --quiet
 python main.py --scan
 
 :: GUI
-python gui.py
+python main.py --gui
 
 :: 语法检查（不产生 __pycache__）
-python -B -m compileall -q core modules main.py gui.py reporter.py
+python -B -m compileall -q core modules main.py gui_qt.py reporter.py
 ```
 
 > CI 中**不会**运行真实扫描（依赖机器环境且耗时），只做静态检查与单元测试。

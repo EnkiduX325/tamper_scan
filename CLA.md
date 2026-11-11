@@ -2,7 +2,7 @@
 
 > **CLA-TEMPLATE**：本文件是 TamperScan 贡献者许可协议（Contributor License Agreement）的模板。
 > 项目在正式接受外部贡献前，应由项目维护者确认最终文本（必要时经法律顾问审阅）并启用签署流程。
-> 文档版本：1.0（2026-11-11，对应 TamperScan v1.4.0）。
+> 文档版本：1.0（2026-11-11，对应 TamperScan v1.5.0）。
 
 感谢您对 TamperScan 的关注！为明确贡献内容的授权，项目方需要您签署本协议。
 
