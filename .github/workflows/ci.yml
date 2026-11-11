@@ -57,4 +57,9 @@ jobs:
 
       - name: Validate sample report JSON
         run: |
-          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.1.0' and d['scan']['modules_total'] == 19; print('sample report OK:', len(d['findings']), 'findings,', d['scan']['modules_total'], 'modules')"
+          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.2.0' and d['scan']['modules_total'] == 20 and len(d['scan']['modules']) == 20; print('sample report OK:', len(d['findings']), 'findings,', d['scan']['modules_total'], 'modules')"
+
+      # V1.2：版本号唯一来源与 LICENSE（CC BY-NC 4.0）一致性校验。
+      - name: Validate version and license consistency
+        run: |
+          python -c "import pathlib, sys; sys.path.insert(0, '.'); from core.version import __version__; lic = pathlib.Path('LICENSE').read_text(encoding='utf-8'); assert __version__ == '1.2.0', __version__; assert ('CC BY-NC 4.0' in lic) or ('Attribution-NonCommercial' in lic), 'LICENSE missing CC BY-NC 4.0'; assert 'MIT License' not in lic, 'LICENSE still contains MIT License'; print('version/license OK:', __version__)"
