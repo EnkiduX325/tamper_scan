@@ -39,6 +39,16 @@ V1.4 增强
   计算 SHA256 写入 ``evidence["sha256"]``；若基线与本次的签名状态都是 ``valid``
   但 SHA256 不同（白利用式篡改），强制判定 ``MODIFIED`` 并提升为 HIGH。
 
+V1.5 C2 增强（系统更新时间窗容差）
+--------------------------------
+- **1 小时时间窗 + 系统更新目录**：哈希变化且"签名一致 + 版本未回退"时，若文件
+  ``mtime`` 距基线生成时间不超过 3600 秒（且不早于基线），并且路径位于
+  ``WinSxS`` / ``System32\\DriverStore`` / ``servicing`` / ``$WinREAgent`` /
+  ``SoftwareDistribution``，则判定为 Windows 更新刚写入系统文件的正常行为，
+  直接输出 ``BENIGN_UPDATE``（完全静默，不受 ``--treat-version-bump-as-benign``
+  开关影响）。``mtime`` 优先取 ``evidence.mtime``，缺失时对本地文件 target 做
+  ``os.stat`` 兜底；任一条件缺失都保持原有 ``MODIFIED`` 判定，不引入新的静默。
+
 典型用法::
 
     from core import baseline
@@ -53,9 +63,11 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from . import utils
@@ -120,6 +132,31 @@ VOLATILE_KEYS: frozenset[str] = frozenset(
 # 文件哈希时默认只处理这些严重等级（与任务要求一致）
 HASH_SEVERITIES: tuple[str, ...] = ("HIGH", "MEDIUM")
 
+# V1.5 C2：系统更新目录时间窗容差（哈希变化但文件是刚被系统更新写入的）
+#: 文件 mtime 晚于基线生成时间且相差不超过 1 小时，才视为"刚更新的系统文件"
+SYSTEM_UPDATE_WINDOW_SECONDS = 3600
+
+#: 相对系统根目录（%SystemRoot%）的系统更新/组件目录白名单
+SYSTEM_UPDATE_SUBDIRS: tuple[str, ...] = (
+    "WinSxS",
+    os.path.join("System32", "DriverStore"),
+    "servicing",
+    "$WinREAgent",
+    "SoftwareDistribution",
+)
+
+#: 读取 Finding 文件 mtime 时依次尝试的 evidence 路径（V1.5 新增，旧数据缺失即跳过）
+_MTIME_EVIDENCE_PATHS: tuple[tuple[str, ...], ...] = (
+    ("mtime",),
+    ("last_write_time",),
+    ("modified_time",),
+    ("target_mtime",),
+    ("file", "mtime"),
+    ("file", "last_write_time"),
+    ("file_info", "mtime"),
+    ("file_info", "last_write_time"),
+)
+
 _MISSING = object()
 
 
@@ -145,6 +182,8 @@ class DiffEntry:
     # V1.4：良性版本前进豁免（哈希变化但版本单调前进）
     version_bump: bool = False
     benign_update: bool = False
+    # V1.5 C2：系统更新时间窗豁免（mtime 距基线生成 1h 内 + 系统更新目录）
+    recent_system_update: bool = False
     baseline_version: Any = None
     current_version: Any = None
     baseline_finding: dict[str, Any] | None = None
@@ -165,6 +204,7 @@ class DiffEntry:
             "hash_tamper": self.hash_tamper,
             "version_bump": self.version_bump,
             "benign_update": self.benign_update,
+            "recent_system_update": self.recent_system_update,
             "baseline_version": self.baseline_version,
             "current_version": self.current_version,
         }
@@ -796,12 +836,195 @@ def _version_progression(
     return False, baseline_token, current_token
 
 
+# ---------------------------------------------------------------------------
+# V1.5 C2：系统更新时间窗容差
+# ---------------------------------------------------------------------------
+
+
+def _to_epoch_seconds(value: Any) -> float | None:
+    """把 epoch 秒 / 毫秒 / ISO8601 / datetime 防御性解析为 epoch 秒。
+
+    容错规则：
+
+    - 秒/毫秒数值以及**数字字符串**统一按 ``>1e12`` 视为毫秒并除以 1000；
+    - 无时区的 ISO / 日期字符串按 **UTC** 解释（与无时区 datetime 对象一致，
+      避免不同主机时区导致 1 小时窗口偏移）；
+    - ``NaN`` / ``±inf`` / bool / 缺失 / 非法值 -> ``None``，绝不抛异常。
+    """
+    if value is None or value is _MISSING or isinstance(value, bool):
+        return None
+    if isinstance(value, datetime):
+        try:
+            moment = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+            return moment.timestamp()
+        except (OSError, OverflowError, ValueError):
+            return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if not math.isfinite(number):
+            return None
+        if abs(number) > 1e12:  # 毫秒时间戳
+            number /= 1000.0
+        return number
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        number = None
+    if number is not None:
+        if not math.isfinite(number):
+            return None
+        if abs(number) > 1e12:  # 数字字符串形态的毫秒时间戳
+            number /= 1000.0
+        return number
+    iso_text = text[:-1] + "+00:00" if text.endswith(("Z", "z")) else text
+    try:
+        moment = datetime.fromisoformat(iso_text)
+    except (OSError, OverflowError, ValueError):
+        moment = None
+    if moment is not None:
+        try:
+            return (moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)).timestamp()
+        except (OSError, OverflowError, ValueError):
+            return None
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text, pattern).replace(tzinfo=timezone.utc).timestamp()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _system_update_roots(roots: Iterable[str] | None = None) -> list[str]:
+    """系统更新目录前缀列表（默认按 ``%SystemRoot%`` 拼装，可用参数覆盖/测试）。"""
+    if roots is not None:
+        return [str(item).strip() for item in roots if str(item or "").strip()]
+    base = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\Windows"
+    return [os.path.join(base, sub) for sub in SYSTEM_UPDATE_SUBDIRS]
+
+
+def _is_system_update_path(path: Any, roots: Iterable[str] | None = None) -> bool:
+    """路径是否位于系统更新/组件目录（WinSxS / DriverStore / servicing 等）。"""
+    if not path:
+        return False
+    text = str(path).strip()
+    if not text:
+        return False
+    return any(utils.path_under(text, root) for root in _system_update_roots(roots))
+
+
+def _is_recent_system_update(
+    file_mtime: Any,
+    baseline_generated_at: Any,
+    file_path: Any = _MISSING,
+    *,
+    roots: Iterable[str] | None = None,
+) -> bool:
+    """判断一次哈希变化是否属于"刚发生的系统更新"（V1.5 C2）。
+
+    判定条件（必须同时满足）：
+
+    1. ``file_mtime`` 与 ``baseline_generated_at`` 都可解析；
+    2. ``0 <= file_mtime - baseline_generated_at <= 3600`` 秒（基线生成后 1 小时内）；
+    3. ``file_path`` 位于系统更新目录白名单（``WinSxS`` /
+       ``System32\\DriverStore`` / ``servicing`` / ``$WinREAgent`` /
+       ``SoftwareDistribution``，均以 ``%SystemRoot%`` 为根）。
+
+    兼容两种调用方式：**省略**第三个参数时仅判定时间窗（供单元测试/调用方自行
+    判断目录）；显式传 ``file_path``（包括 ``None`` / 空串）时同时校验目录，空值
+    返回 ``False``（fail closed），避免未来调用方漏传路径导致意外放行。
+
+    该函数是纯函数（仅读取 ``SystemRoot`` 环境变量拼默认根目录，可用 ``roots``
+    参数显式覆盖），不做任何 IO / 全局状态修改。缺少 mtime 或基线时间时一律
+    返回 ``False``（保持原有判定，不引入新的静默）。
+    """
+    mtime = _to_epoch_seconds(file_mtime)
+    baseline_time = _to_epoch_seconds(baseline_generated_at)
+    if mtime is None or baseline_time is None:
+        return False
+    delta = mtime - baseline_time
+    if not 0 <= delta <= SYSTEM_UPDATE_WINDOW_SECONDS:
+        return False
+    if file_path is _MISSING:
+        return True
+    if file_path is None or not str(file_path).strip():
+        return False
+    return _is_system_update_path(file_path, roots)
+
+
+def _looks_like_local_drive(value: Any) -> bool:
+    """是否本地盘符路径（``^[A-Za-z]:[\\/]``）；UNC 不算，避免触发网络 stat。"""
+    return bool(re.match(r"(?i)^[a-z]:[\\/]", str(value or "").strip()))
+
+
+def _looks_like_unc(value: Any) -> bool:
+    """是否 UNC 网络路径（``\\\\server\\share``）。"""
+    return str(value or "").strip().startswith("\\\\")
+
+
+def _looks_like_local_path(value: Any) -> bool:
+    """兼容旧名：仅本地盘符路径允许 stat（UNC 返回 False）。"""
+    return _looks_like_local_drive(value)
+
+
+def _finding_file_mtime(finding: dict[str, Any] | None) -> Any:
+    """从 Finding 提取文件 mtime：优先 evidence，再对本地文件 target 做 os.stat 兜底。"""
+    evidence = _evidence_of(finding)
+    for path in _MTIME_EVIDENCE_PATHS:
+        value = _dig(evidence, path)
+        if value is not _MISSING and value is not None:
+            return value
+    target = _finding_target_path(finding)
+    if target and _looks_like_local_drive(target):
+        try:
+            return os.path.getmtime(target)
+        except OSError:
+            return None
+    return None
+
+
+def _finding_target_path(finding: dict[str, Any] | None) -> str:
+    """提取用于目录判定的目标路径（优先 target，其次 evidence 中的文件路径）。"""
+    if not isinstance(finding, dict):
+        return ""
+    target = str(finding.get("target") or "").strip()
+    if target:
+        return target
+    evidence = _evidence_of(finding)
+    for key in ("image_path", "path", "file_path", "target_path"):
+        value = evidence.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _version_not_regressed(
+    baseline_finding: dict[str, Any] | None,
+    current_finding: dict[str, Any] | None,
+) -> bool:
+    """版本是否"未回退"：无版本信息视为未回退；任一可比较版本回退则 False。"""
+    baseline_fv, baseline_ts = _pe_versions(baseline_finding)
+    current_fv, current_ts = _pe_versions(current_finding)
+    if baseline_fv is not None and current_fv is not None:
+        if _compare_version_tuples(baseline_fv, current_fv) < 0:
+            return False
+        if baseline_ts is not None and current_ts is not None and current_ts < baseline_ts:
+            return False
+        return True
+    if baseline_ts is not None and current_ts is not None and current_ts < baseline_ts:
+        return False
+    return True
+
+
 def _make_entry(
     rule_base: str,
     baseline_finding: dict[str, Any] | None,
     current_finding: dict[str, Any] | None,
     *,
     treat_version_bump_as_benign: bool = False,
+    baseline_generated_at: Any = None,
 ) -> DiffEntry:
     current_target = current_finding.get("target") if isinstance(current_finding, dict) else None
     baseline_target = baseline_finding.get("target") if isinstance(baseline_finding, dict) else None
@@ -835,7 +1058,26 @@ def _make_entry(
         version_bump, baseline_version, current_version = _version_progression(
             baseline_finding, current_finding
         )
-        if version_bump and _same_nonempty_signer(baseline_finding, current_finding):
+        same_signer = _same_nonempty_signer(baseline_finding, current_finding)
+        # V1.5 C2：签名一致、版本未回退，且文件 mtime 在基线生成后 1 小时内、
+        # 位于系统更新目录 -> 视为 Windows 更新刚写入，降级 BENIGN_UPDATE（完全静默）。
+        if (
+            same_signer
+            and _version_not_regressed(baseline_finding, current_finding)
+            and _is_recent_system_update(
+                _finding_file_mtime(current_finding),
+                baseline_generated_at,
+                _finding_target_path(current_finding),
+            )
+        ):
+            entry.status = DIFF_BENIGN_UPDATE
+            entry.benign_update = True
+            entry.recent_system_update = True
+            entry.version_bump = version_bump
+            entry.baseline_version = baseline_version
+            entry.current_version = current_version
+            return entry
+        if version_bump and same_signer:
             entry.version_bump = True
             entry.baseline_version = baseline_version
             entry.current_version = current_version
@@ -848,7 +1090,7 @@ def _make_entry(
                 entry.status = DIFF_MODIFIED
                 entry.current_severity = "MEDIUM"
             return entry
-        # 签名者不同 / 版本倒退 / 无版本信息：保持原逻辑 MODIFIED + HIGH
+        # 签名者不同 / 版本倒退 / 非系统更新目录 / 无 mtime：保持原逻辑 MODIFIED + HIGH
         entry.status = DIFF_MODIFIED
         entry.current_severity = "HIGH"
         return entry
@@ -882,6 +1124,10 @@ def diff_reports(
             True 输出 ``BENIGN_UPDATE``（完全静默）；False（默认）仍输出
             ``MODIFIED`` 但降为 MEDIUM。
 
+    V1.5 C2：哈希变化且"签名一致 + 版本未回退 + 文件 mtime 在基线生成后 1 小时内
+    + 位于系统更新目录"时，无论 ``treat_version_bump_as_benign`` 取值如何都输出
+    ``BENIGN_UPDATE``（对应 Windows 更新刚写入系统文件）。
+
     主键匹配分两阶段：先配对"基线/当前都存在"的 Finding（多个规则基名任一命中
     即视为同一事实），再把未配对项标为 RESOLVED / NEW，避免 merged_rules 或
     规则基名变化导致同一事实被重复计数。
@@ -890,6 +1136,11 @@ def diff_reports(
     current_findings = _report_findings(current_report)
     baseline_index = index_findings(baseline_findings)
     current_index = index_findings(current_findings)
+    baseline_generated_at = (
+        str(baseline_report.get("generated_at") or "")
+        if isinstance(baseline_report, dict)
+        else ""
+    )
 
     entries: list[DiffEntry] = []
     paired_baseline: set[int] = set()
@@ -912,6 +1163,7 @@ def diff_reports(
                 baseline_finding,
                 current_finding,
                 treat_version_bump_as_benign=treat_version_bump_as_benign,
+                baseline_generated_at=baseline_generated_at,
             )
         )
 
@@ -922,7 +1174,13 @@ def diff_reports(
             continue
         paired_baseline.add(id(baseline_finding))
         entries.append(
-            _make_entry(key[1], baseline_finding, None, treat_version_bump_as_benign=treat_version_bump_as_benign)
+            _make_entry(
+                key[1],
+                baseline_finding,
+                None,
+                treat_version_bump_as_benign=treat_version_bump_as_benign,
+                baseline_generated_at=baseline_generated_at,
+            )
         )
     for key in sorted(current_index):
         current_finding = current_index[key]
@@ -930,7 +1188,13 @@ def diff_reports(
             continue
         paired_current.add(id(current_finding))
         entries.append(
-            _make_entry(key[1], None, current_finding, treat_version_bump_as_benign=treat_version_bump_as_benign)
+            _make_entry(
+                key[1],
+                None,
+                current_finding,
+                treat_version_bump_as_benign=treat_version_bump_as_benign,
+                baseline_generated_at=baseline_generated_at,
+            )
         )
 
     counts = {status: 0 for status in DIFF_STATUSES}
@@ -998,7 +1262,8 @@ def annotate_findings(
     - 有 diff 时每个返回项（含追加的 RESOLVED 项）写 ``normalized_key``（V1.4）；
       无 diff 的纯扫描路径不新增该键，保证默认 JSON 与 V1.3 一致；
     - ``BENIGN_UPDATE`` 条目完全静默：不提升严重等级、不追加篡改提示，仅写
-      ``evidence.benign_update=True`` 与版本信息；
+      ``evidence.benign_update=True``；版本前进时追加版本信息，系统更新时间窗
+      豁免时追加 ``evidence.recent_system_update=True``；
     - ``MODIFIED`` 且版本前进（``entry.version_bump``）：降为 MEDIUM，detail 追加
       "版本正常前进（自动更新），已降级为 MEDIUM"，不再写 HIGH 篡改措辞；
     - 其它 ``hash_tamper`` 条目：提升为 HIGH，并在 detail 追加篡改提示；
@@ -1036,7 +1301,10 @@ def annotate_findings(
         if entry.status == DIFF_BENIGN_UPDATE:
             # 完全静默：不提升严重等级、不写篡改 detail；reporter 负责中性样式
             evidence["benign_update"] = True
-            _attach_version_evidence(evidence, entry)
+            if entry.recent_system_update:
+                evidence["recent_system_update"] = True
+            if entry.version_bump:
+                _attach_version_evidence(evidence, entry)
         elif entry.hash_tamper and entry.version_bump:
             # 版本正常前进（自动更新）：降为 MEDIUM，不写"疑似被篡改"措辞
             item["severity"] = "MEDIUM"

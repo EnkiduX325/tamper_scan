@@ -69,6 +69,10 @@ RULE_PARTIAL = "TASK_HIDDEN_PARTIAL"
 # 需要严格按"Index==0 一律 HIGH"验收时，改成 "HIGH" 即可（规则编号不变）。
 STALE_INDEX_ZERO_SEVERITY = "MEDIUM"
 
+# Windows 系统任务根路径：官方任务在 Win11 可能出现 Index=0 的历史残留，
+# 在确认 SD 正常且无 Tasks 定义时降为 INFO，避免大量 MEDIUM 噪音。
+SYSTEM_TASK_NOISE_PREFIX = "Microsoft\\Windows\\"
+
 _TREE_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree"
 _TASKS_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks"
 _ROOT_DISPLAY = r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree"
@@ -400,8 +404,15 @@ def _analyze_node(relative: str, values: dict[str, tuple[Any, int]]) -> list[dic
     detail = f"计划任务缓存项 {truncate(task_label, 200)} 异常：" + "；".join(descriptions)
     severity = "HIGH"
     if stale_candidate:
-        severity = STALE_INDEX_ZERO_SEVERITY
-        detail += "；未找到对应 Tasks\\<Id> 定义（常见于历史残留键，请确认该任务是否仍会执行）"
+        if relative.startswith(SYSTEM_TASK_NOISE_PREFIX):
+            severity = "INFO"
+            detail += (
+                "；Windows 内置任务（Microsoft\\Windows\\）历史遗留 Index=0，"
+                "且 SD 正常、无 Tasks 定义，已降级为 INFO"
+            )
+        else:
+            severity = STALE_INDEX_ZERO_SEVERITY
+            detail += "；未找到对应 Tasks\\<Id> 定义（常见于历史残留键，请确认该任务是否仍会执行）"
     return [make_finding(severity, CATEGORY, task_label, detail, evidence, RULE_TARRASK)]
 
 

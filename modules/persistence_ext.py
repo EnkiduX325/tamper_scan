@@ -118,6 +118,11 @@ _DESKTOP_DISPLAY = rf"HKCU\{_DESKTOP_KEY}"
 # Active Setup 中属于"正常刷新"的签名者关键字：微软 / Edge / Office 组件
 _ACTIVE_SETUP_TRUSTED_SIGNERS = ("microsoft", "edge", "office")
 
+# Chrome 官方 Active Setup：Google 签名 + 官方 Application 安装目录时降为 INFO
+# （其他第三方路径仍按 MEDIUM 上报，避免借 Chrome 目录蹭豁免）。
+_ACTIVE_SETUP_CHROME_DIR = "\\google\\chrome\\application\\"
+_ACTIVE_SETUP_CHROME_SIGNERS = ("google", "chrome")
+
 # AppCompatFlags\InstalledSDB\<id> 下与实际加载数据库/shim 相关的值名
 _INSTALLED_SDB_VALUE_NAMES = ("DatabasePath", "ShimPath", "SdbPath")
 
@@ -621,6 +626,17 @@ def _analyze_print_monitor(
 # ---------------------------------------------------------------------------
 
 
+def _is_official_chrome_stub(raw_value: Any, sig_result: dict[str, Any]) -> bool:
+    """Google 签名 + Chrome 官方 Application 目录的 Active Setup StubPath。"""
+    if str(sig_result.get("status") or "") != "valid":
+        return False
+    signer = sig_result.get("signer")
+    if not _signer_matches_any(signer, _ACTIVE_SETUP_CHROME_SIGNERS):
+        return False
+    normalized = str(utils.normalize_path(raw_value) or "").replace("/", "\\").lower()
+    return _ACTIVE_SETUP_CHROME_DIR in normalized
+
+
 def _analyze_active_setup(
     component_id: str,
     raw_value: Any,
@@ -633,6 +649,8 @@ def _analyze_active_setup(
     - 非可执行/开关式遗留值（Win11 内置 ``/UserInstall``、``U`` 等）不指向任何
       可执行文件，按基线直接跳过，不产出 Finding（见 :func:`_looks_like_executable_reference`）；
     - 微软 / Edge / Office 的有效签名放行（这是系统正常的登录刷新行为）；
+    - Google 签名且位于 Chrome 官方 ``Application`` 目录时降为 **INFO**（系统级
+      正常刷新，避免 Win11 实机上的 MEDIUM 噪音）；
     - 其余（第三方签名 / 无签名 / 无效 / 缺失）-> MEDIUM（仍按签名规则检测，
       裸可执行名与路径型值都适用）。
     """
@@ -645,6 +663,7 @@ def _analyze_active_setup(
     signer = sig_result.get("signer")
     if status == "valid" and _signer_matches_any(signer, _ACTIVE_SETUP_TRUSTED_SIGNERS):
         return []
+    official_chrome = _is_official_chrome_stub(text, sig_result)
     reasons = _dll_risk_reasons(sig_result, path_state) or ["untrusted_signer"]
     key = registry_key or f"{_ACTIVE_SETUP_DISPLAY}\\{component_id}"
     evidence = _base_evidence(
@@ -658,9 +677,16 @@ def _analyze_active_setup(
             "stub_path": truncate(text, 400),
             "trusted_signers": list(_ACTIVE_SETUP_TRUSTED_SIGNERS),
             "reasons": reasons,
+            "official_browser_stub": official_chrome,
         },
     )
     target = str(path_state.get("executable") or f"{key}\\StubPath")
+    if official_chrome:
+        detail = (
+            f"Active Setup 组件 {component_id} 的 StubPath 指向 Chrome 官方程序："
+            f"{truncate(text, 200)}（Google 签名有效，系统级正常刷新，已降级为 INFO）"
+        )
+        return [make_finding("INFO", CATEGORY, target, truncate(detail, 300), evidence, RULE_ACTIVE_SETUP_STUB)]
     detail = (
         f"Active Setup 组件 {component_id} 的 StubPath 指向非微软/Edge/Office 程序："
         f"{truncate(text, 200)}（{_describe_reasons(reasons)}；每个用户登录时都会执行）"

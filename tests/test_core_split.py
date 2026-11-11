@@ -222,7 +222,7 @@ class TestNoCircularImport(unittest.TestCase):
         self.assertIn("ok", completed.stdout)
 
     def test_fresh_import_entrypoints(self) -> None:
-        completed = _fresh_import("import main, gui, reporter, core.utils; print('ok')")
+        completed = _fresh_import("import main, reporter, core.utils; print('ok')")
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 

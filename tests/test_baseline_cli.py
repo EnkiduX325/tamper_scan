@@ -189,7 +189,7 @@ class TestSaveBaseline(BaselineCliTestCase):
         self.assertIn("基线已保存", stdout)
         self.assertTrue(path.is_file())
         data = self._read_json(path)
-        self.assertEqual(data["version"], "1.4.0")
+        self.assertEqual(data["version"], "1.5.0")
         self.assertEqual(data["version"], __version__)
         self.assertEqual(len(data["findings"]), 1)
         self.assertEqual(data["findings"][0]["rule_id"], "SIG_UNSIGNED")
@@ -518,7 +518,7 @@ class TestBackwardCompat(BaselineCliTestCase):
         )
         self.assertNotIn("baseline", data)
         self.assertNotIn("diff_counts", data["summary"])
-        self.assertEqual(data["version"], "1.4.0")
+        self.assertEqual(data["version"], "1.5.0")
         for item in data["findings"]:
             self.assertNotIn("diff_status", item)
             self.assertNotIn("sha256", item.get("evidence") or {})

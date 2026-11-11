@@ -62,5 +62,112 @@
       "note": "NVIDIA 32 位驱动插件正常安装到 SysWOW64 根目录"
     }
   ],
-  "persistence_ext_allow": []
+  "persistence_ext_allow": [],
+  "fingerprints": [
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles%/7-Zip/",
+      "source": "builtin_noise_reduction",
+      "note": "7-Zip 官方安装目录（Igor Pavlov 开源工具，常无 Authenticode）"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles(x86)%/7-Zip/",
+      "source": "builtin_noise_reduction",
+      "note": "7-Zip 32 位官方安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles%/NeatDM/",
+      "source": "builtin_noise_reduction",
+      "note": "Neat Download Manager 官方安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles(x86)%/NeatDM/",
+      "source": "builtin_noise_reduction",
+      "note": "Neat Download Manager 32 位安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%LOCALAPPDATA%/Programs/NeatDM/",
+      "source": "builtin_noise_reduction",
+      "note": "Neat Download Manager 当前用户安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles%/LinkedIn/",
+      "source": "builtin_noise_reduction",
+      "note": "LinkedIn 官方桌面客户端安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%ProgramFiles(x86)%/LinkedIn/",
+      "source": "builtin_noise_reduction",
+      "note": "LinkedIn 官方桌面客户端 32 位安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_SIG_UNSIGNED",
+      "signer_contains": "",
+      "target_prefix": "%LOCALAPPDATA%/Programs/LinkedIn/",
+      "source": "builtin_noise_reduction",
+      "note": "LinkedIn 当前用户安装目录"
+    },
+    {
+      "rule_id": "AUTORUNS_USERWRITABLE",
+      "signer_contains": "Alibaba",
+      "target_prefix": "%LOCALAPPDATA%/Programs/Common/Quark/",
+      "source": "builtin_noise_reduction",
+      "note": "夸克浏览器组件位于当前用户安装目录，且签名者为 Alibaba"
+    },
+    {
+      "rule_id": "AUTORUNS_USERWRITABLE",
+      "signer_contains": "Alibaba",
+      "target_prefix": "%LOCALAPPDATA%/Programs/Quark/",
+      "source": "builtin_noise_reduction",
+      "note": "夸克浏览器当前用户安装目录（兼容旧版布局）"
+    },
+    {
+      "rule_id": "ACTIVE_SETUP_STUB",
+      "signer_contains": "Google",
+      "target_prefix": "%ProgramFiles%/Google/Chrome/Application/",
+      "source": "builtin_noise_reduction",
+      "note": "Chrome 官方 Active Setup chrmstp.exe（Google 签名）"
+    },
+    {
+      "rule_id": "ACTIVE_SETUP_STUB",
+      "signer_contains": "Google",
+      "target_prefix": "%ProgramFiles(x86)%/Google/Chrome/Application/",
+      "source": "builtin_noise_reduction",
+      "note": "Chrome 32 位官方 Active Setup 目录"
+    },
+    {
+      "rule_id": "ACTIVE_SETUP_STUB",
+      "signer_contains": "Google",
+      "target_prefix": "%LOCALAPPDATA%/Google/Chrome/Application/",
+      "source": "builtin_noise_reduction",
+      "note": "Chrome 当前用户安装 Active Setup 目录"
+    },
+    {
+      "rule_id": "ACTIVE_SETUP_STUB",
+      "signer_contains": "Microsoft",
+      "target_prefix": "%ProgramFiles%/Microsoft/Edge/Application/",
+      "source": "builtin_noise_reduction",
+      "note": "Edge 官方 Active Setup 目录"
+    },
+    {
+      "rule_id": "ACTIVE_SETUP_STUB",
+      "signer_contains": "Microsoft",
+      "target_prefix": "%ProgramFiles(x86)%/Microsoft/Edge/Application/",
+      "source": "builtin_noise_reduction",
+      "note": "Edge 32 位官方 Active Setup 目录"
+    }
+  ]
 }

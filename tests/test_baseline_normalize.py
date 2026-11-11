@@ -44,7 +44,7 @@ def _finding(rule_id: str, target: str, severity: str = "HIGH", **evidence: obje
 
 
 def _report(*findings: dict) -> dict:
-    return {"tool": "TamperScan", "version": "1.4.0", "findings": list(findings)}
+    return {"tool": "TamperScan", "version": "1.5.0", "findings": list(findings)}
 
 
 def _fake_kernel32(result_path: str):

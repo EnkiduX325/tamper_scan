@@ -223,6 +223,36 @@
         "require_all": false,
         "target_contains": ["\\policies\\", "\\software\\policies"]
       }
+    },
+    {
+      "id": "microsoft_svchost_shell_child",
+      "description": "微软签名的 svchost.exe 启动 cmd.exe / powershell.exe：服务宿主调用系统 shell 是 Windows 正常行为（服务脚本、计划任务、更新器），同时出现 PARENT_ANOMALY 与 LOLBIN_CMDLINE 且目标指向 svchost 时不应单独成链。",
+      "match": {
+        "rule_ids": ["PARENT_ANOMALY", "LOLBIN_CMDLINE"],
+        "tactics": [],
+        "require_all": true,
+        "target_contains": ["svchost"]
+      }
+    },
+    {
+      "id": "browser_auto_updater_noise",
+      "description": "Edge / Chrome 自动更新器产生的文件变更：Google Update、Microsoft Edge Update、Chrome Application 目录下的未签名/新写入文件与启动项变化，属浏览器静默升级的正常噪声。",
+      "match": {
+        "rule_ids": ["SIG_UNSIGNED", "SIG_INVALID", "AUTORUNS_USERWRITABLE", "RUN_USERWRITABLE"],
+        "tactics": [],
+        "require_all": false,
+        "target_contains": ["\\google\\update\\", "\\microsoft\\edge\\update\\", "\\edgeupdate\\", "\\chrome\\application\\"]
+      }
+    },
+    {
+      "id": "windows_servicing_update_noise",
+      "description": "Windows 更新/组件服务写入：WinSxS、DriverStore、servicing、SoftwareDistribution 等系统更新目录下的文件签名波动与哈希变化，属系统更新正常噪声（与 baseline 的 1 小时时间窗豁免互补）。",
+      "match": {
+        "rule_ids": ["SIG_UNSIGNED", "SIG_INVALID"],
+        "tactics": [],
+        "require_all": false,
+        "target_contains": ["\\winsxs\\", "\\driverstore\\", "\\servicing\\", "\\softwaredistribution\\"]
+      }
     }
   ]
 }

@@ -510,7 +510,7 @@ class TestBackwardCompat(CliV14TestCase):
 
         data = self._output_json(out)
         self.assertEqual(set(data), V13_REPORT_KEYS)
-        self.assertEqual(data["version"], "1.4.0")
+        self.assertEqual(data["version"], "1.5.0")
         for key in ("campaigns", "campaign_stats", "campaign_shadow"):
             self.assertNotIn(key, data)
         self.assertNotIn("baseline", data)
@@ -574,7 +574,19 @@ class TestBuildBat(unittest.TestCase):
         lowered = self.text.lower()
         self.assertEqual(lowered.count("python -m pyinstaller %common%"), 2)
         self.assertIn("--name tamper_scan main.py", self.text)
-        self.assertIn("--name tamper_scan_gui gui.py", self.text)
+        self.assertIn("--name tamper_scan_gui gui_qt.py", self.text)
+        self.assertNotIn("--name tamper_scan_gui gui.py", self.text)
+
+    def test_build_bat_collects_pyqt6_for_gui(self) -> None:
+        """V1.5：GUI exe 必须收集 PyQt6/Qt6（platforms/qwindows.dll 等插件）。"""
+        self.assertIn("--collect-all PyQt6", self.text)
+        self.assertIn("--collect-all PyQt6.Qt6", self.text)
+        self.assertIn("--hidden-import PyQt6.QtCore", self.text)
+        self.assertIn("--hidden-import PyQt6.QtGui", self.text)
+        self.assertIn("--hidden-import PyQt6.QtWidgets", self.text)
+        # CLI 构建行不带 PyQt6 collect，保证命令行 exe 独立且体积小
+        cli_line = next((line for line in self.lines if "--name tamper_scan main.py" in line), "")
+        self.assertNotIn("QT_COLLECT", cli_line)
 
 
 if __name__ == "__main__":

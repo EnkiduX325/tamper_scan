@@ -95,7 +95,7 @@ def _create_test_tree() -> None:
             "Index": (0, winreg.REG_DWORD),
             "SD": (VALID_SD, winreg.REG_BINARY),
         },
-        r"Microsoft\Windows\StaleZeroTask": {  # Index==0 且无 Id（历史残留，应降为 MEDIUM）
+        r"Microsoft\Windows\StaleZeroTask": {  # Index==0 且无 Id（Windows 系统任务历史残留，应降为 INFO）
             "Index": (0, winreg.REG_DWORD),
             "SD": (VALID_SD, winreg.REG_BINARY),
         },
@@ -397,8 +397,8 @@ class TestRealRegistryWalk(unittest.TestCase):
         self.assertEqual(by_target[r"\Microsoft\Windows\IndexZeroTask"]["evidence"]["reasons"], ["index_zero"])
         self.assertEqual(by_target[r"\Microsoft\Windows\EvilTask"]["severity"], "HIGH")
         self.assertEqual(by_target[r"\Microsoft\Windows\IndexZeroTask"]["severity"], "HIGH")
-        # Index==0 且无 Id/无 Tasks 定义的历史残留键：仍上报，但默认降为 MEDIUM
-        self.assertEqual(by_target[r"\Microsoft\Windows\StaleZeroTask"]["severity"], "MEDIUM")
+        # Index==0 且无 Id/无 Tasks 定义的 Windows 系统任务历史残留：仍上报，但降为 INFO
+        self.assertEqual(by_target[r"\Microsoft\Windows\StaleZeroTask"]["severity"], "INFO")
         self.assertTrue(by_target[r"\Microsoft\Windows\StaleZeroTask"]["evidence"]["stale_candidate"])
 
     def test_scan_end_to_end_against_synthetic_tree(self) -> None:
@@ -433,7 +433,7 @@ class TestRealRegistryWalk(unittest.TestCase):
         severities = {finding["target"]: finding["severity"] for finding in findings}
         self.assertEqual(severities[r"\Microsoft\Windows\EvilTask"], "HIGH")
         self.assertEqual(severities[r"\Microsoft\Windows\IndexZeroTask"], "HIGH")
-        self.assertEqual(severities[r"\Microsoft\Windows\StaleZeroTask"], "MEDIUM")
+        self.assertEqual(severities[r"\Microsoft\Windows\StaleZeroTask"], "INFO")
         self.assertTrue(all(finding["rule_id"] == "TASK_HIDDEN_TARRASK" for finding in findings))
 
     def test_missing_root_reports_not_found_without_raising(self) -> None:

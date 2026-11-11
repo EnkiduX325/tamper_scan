@@ -142,7 +142,8 @@ class BenignUpdateTests(unittest.TestCase):
         self.assertNotIn(WARNING_TEXT, html)
 
     def test_benign_update_shows_version_note(self) -> None:
-        html = reporter.render_html(_with_status("BENIGN_UPDATE"))
+        # V1.5 rc2：BENIGN_UPDATE 的“版本正常前进”文案仅在 evidence.version_bump 时展示
+        html = reporter.render_html(_with_status("BENIGN_UPDATE", {"version_bump": True}))
         self.assertIn("版本正常前进（自动更新）", html)
 
     def test_benign_update_diff_counts_renders_seven_statuses(self) -> None:
@@ -165,7 +166,7 @@ class BenignUpdateTests(unittest.TestCase):
 
     def test_benign_update_fallback_rendering(self) -> None:
         with mock.patch.object(reporter, "JINJA2_AVAILABLE", False):
-            html = reporter.render_html(_with_status("BENIGN_UPDATE"))
+            html = reporter.render_html(_with_status("BENIGN_UPDATE", {"version_bump": True}))
         self.assertIn("diff-badge-BENIGN_UPDATE", html)
         self.assertIn("版本正常前进（自动更新）", html)
         self.assertNotIn(WARNING_TEXT, html)

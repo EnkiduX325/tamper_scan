@@ -71,7 +71,7 @@ def _finding(
 
 
 def _report(*findings: dict[str, Any]) -> dict[str, Any]:
-    return {"tool": "TamperScan", "version": "1.4.0", "findings": list(findings)}
+    return {"tool": "TamperScan", "version": "1.5.0", "findings": list(findings)}
 
 
 def _diff(
