@@ -41,12 +41,17 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install ruff pytest
 
-      # 只做语法编译，不 import、不运行 main.py / gui.py、不执行真实扫描。
+      # 只做语法编译，不 import、不运行 main.py / gui_qt.py、不执行真实扫描。
       - name: Syntax check (compile only)
         run: |
-          python -m compileall -q core modules main.py gui.py reporter.py tests
+          python -m compileall -q core modules main.py gui_qt.py reporter.py tests
 
-      # 单元测试：纯函数 + HKCU 合成注册表 + 降级路径；不依赖管理员权限与外部工具。
+      # V1.5：PyQt6 GUI 无头冒烟（offscreen，不弹真实窗口）。
+      - name: PyQt6 GUI smoke test (offscreen)
+        run: |
+          python -c "import os; os.environ['QT_QPA_PLATFORM']='offscreen'; from PyQt6.QtWidgets import QApplication; app = QApplication([]); import gui_qt; window = gui_qt.MainWindow(start_update_check=False); assert len(window.stat_cards) == 5 and window.results_list.count() == 0; print('GUI smoke OK:', gui_qt.MainWindow.__name__)"
+
+      # 单元测试：纯函数 + HKCU 合成注册表 + 降级路径 + PyQt6 offscreen GUI；不依赖管理员权限与外部工具。
       - name: Unit tests
         run: |
           python -m pytest -q
@@ -57,17 +62,17 @@ jobs:
 
       - name: Validate sample report JSON
         run: |
-          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.4.0' and d['scan']['modules_total'] == 20 and d['scan']['modules_available'] == 20 and len(d['scan']['modules']) == 20; print('sample report OK:', len(d['findings']), 'findings,', d['scan']['modules_total'], 'modules')"
+          python -c "import json, pathlib; d = json.loads(pathlib.Path('reports/sample_report.json').read_text(encoding='utf-8')); assert d['tool'] == 'TamperScan' and d['version'] == '1.5.0' and d['scan']['modules_total'] == 20 and d['scan']['modules_available'] == 20 and len(d['scan']['modules']) == 20; print('sample report OK:', len(d['findings']), 'findings,', d['scan']['modules_total'], 'modules')"
 
-      # V1.4：版本号唯一来源、AGPL-3.0 LICENSE 与商业双轨文档一致性校验。
+      # V1.5：版本号唯一来源、AGPL-3.0 LICENSE 与商业双轨文档一致性校验。
       - name: Validate version and license consistency
         run: |
-          python -c "import pathlib, sys; sys.path.insert(0, '.'); from core.version import __version__; lic = pathlib.Path('LICENSE').read_text(encoding='utf-8'); assert __version__ == '1.4.0', __version__; assert 'GNU AFFERO GENERAL PUBLIC LICENSE' in lic, 'LICENSE missing AGPL full text'; assert 'Version 3, 19 November 2007' in lic, 'LICENSE missing AGPL version line'; assert ('CC' + ' BY-NC') not in lic, 'LICENSE still mentions the old non-commercial license'; assert pathlib.Path('LICENSE-COMMERCIAL.md').is_file(), 'LICENSE-COMMERCIAL.md missing'; assert pathlib.Path('CLA.md').is_file(), 'CLA.md missing'; print('version/license OK:', __version__, 'AGPL-3.0 + commercial dual-license')"
+          python -c "import pathlib, sys; sys.path.insert(0, '.'); from core.version import __version__; lic = pathlib.Path('LICENSE').read_text(encoding='utf-8'); assert __version__ == '1.5.0', __version__; assert 'GNU AFFERO GENERAL PUBLIC LICENSE' in lic, 'LICENSE missing AGPL full text'; assert 'Version 3, 19 November 2007' in lic, 'LICENSE missing AGPL version line'; assert ('CC' + ' BY-NC') not in lic, 'LICENSE still mentions the old non-commercial license'; assert pathlib.Path('LICENSE-COMMERCIAL.md').is_file(), 'LICENSE-COMMERCIAL.md missing'; assert pathlib.Path('CLA.md').is_file(), 'CLA.md missing'; print('version/license OK:', __version__, 'AGPL-3.0 + commercial dual-license')"
 
       # V1.4：基线对比引擎自检（构造两份小报告，断言七种状态与 --fail-on-new 辅助判断）。
       - name: Baseline engine self-check
         run: |
-          python -c "import sys; sys.path.insert(0, '.'); from core import baseline as b; f = lambda sev, target, rule, **ev: {'severity': sev, 'target': target, 'rule_id': rule, 'evidence': ev}; base = {'version': '1.4.0', 'findings': [f('HIGH', r'C:\u.exe', 'SIG_UNSIGNED', actual='v1'), f('LOW', r'C:\e.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\r.exe', 'SIG_INVALID'), f('MEDIUM', r'C:\d.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\s.exe', 'SIG_UNSIGNED', actual='same')]}; cur = {'version': '1.4.0', 'findings': [f('HIGH', r'C:\u.exe', 'SIG_UNSIGNED', actual='v2'), f('HIGH', r'C:\e.exe', 'RUN_REGISTRY'), f('MEDIUM', r'C:\n.exe', 'SIG_UNSIGNED'), f('LOW', r'C:\d.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\s.exe', 'SIG_UNSIGNED', actual='same')]}; d = b.diff_reports(base, cur); expect = {'NEW': 1, 'MODIFIED': 1, 'ESCALATED': 1, 'DOWNGRADED': 1, 'BENIGN_UPDATE': 0, 'RESOLVED': 1, 'UNCHANGED': 1}; assert d.counts == expect, d.counts; assert b.has_new_high_medium(d) is True; assert b.has_new_high_medium(b.diff_reports(base, {'findings': [f('LOW', r'C:\n.exe', 'SIG_UNSIGNED')]})) is False; assert callable(getattr(b, 'normalize_target', None)); print('baseline engine OK:', d.counts)"
+          python -c "import sys; sys.path.insert(0, '.'); from core import baseline as b; f = lambda sev, target, rule, **ev: {'severity': sev, 'target': target, 'rule_id': rule, 'evidence': ev}; base = {'version': '1.5.0', 'findings': [f('HIGH', r'C:\u.exe', 'SIG_UNSIGNED', actual='v1'), f('LOW', r'C:\e.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\r.exe', 'SIG_INVALID'), f('MEDIUM', r'C:\d.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\s.exe', 'SIG_UNSIGNED', actual='same')]}; cur = {'version': '1.5.0', 'findings': [f('HIGH', r'C:\u.exe', 'SIG_UNSIGNED', actual='v2'), f('HIGH', r'C:\e.exe', 'RUN_REGISTRY'), f('MEDIUM', r'C:\n.exe', 'SIG_UNSIGNED'), f('LOW', r'C:\d.exe', 'RUN_REGISTRY'), f('HIGH', r'C:\s.exe', 'SIG_UNSIGNED', actual='same')]}; d = b.diff_reports(base, cur); expect = {'NEW': 1, 'MODIFIED': 1, 'ESCALATED': 1, 'DOWNGRADED': 1, 'BENIGN_UPDATE': 0, 'RESOLVED': 1, 'UNCHANGED': 1}; assert d.counts == expect, d.counts; assert b.has_new_high_medium(d) is True; assert b.has_new_high_medium(b.diff_reports(base, {'findings': [f('LOW', r'C:\n.exe', 'SIG_UNSIGNED')]})) is False; assert callable(getattr(b, 'normalize_target', None)); print('baseline engine OK:', d.counts)"
 
       # V1.4：攻击链关联引擎自检（真实规则库 + 固定剧本构造 findings，断言 campaign 结构）。
       - name: Correlator self-check
