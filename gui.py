@@ -37,9 +37,10 @@ from datetime import datetime
 from typing import Any, Callable
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 import reporter
+from core import baseline
 from core.finding import SEVERITIES, severity_counts
 from core.scanner import ScanResult, run_scan
 from core.utils import is_admin, truncate
@@ -86,6 +87,86 @@ REMEDIATION_RISK_COLORS = {
 
 FONT_FAMILY = "Segoe UI"
 FONT_MONO = "Consolas"
+
+
+# ---------------------------------------------------------------------------
+# 基线对比（V1.3）
+# ---------------------------------------------------------------------------
+
+#: 结果表格「状态」列定义：(key, 表头, 默认宽度)
+STATUS_COLUMN: tuple[str, str, int] = ("status", "状态", 76)
+
+#: diff_status -> Treeview 整行 tag 名；UNCHANGED / 空状态不加额外 tag
+DIFF_STATUS_TAGS: dict[str, str] = {
+    baseline.DIFF_NEW: "diff_new",
+    baseline.DIFF_MODIFIED: "diff_modified",
+    baseline.DIFF_ESCALATED: "diff_escalated",
+    baseline.DIFF_DOWNGRADED: "diff_downgraded",
+    baseline.DIFF_RESOLVED: "diff_resolved",
+}
+
+#: 状态 tag 样式：NEW 红底白字 / MODIFIED 橙底 / ESCALATED 红底加粗 /
+#: DOWNGRADED 黄底 / RESOLVED 灰字删除线（字体对象在 FindingTree 内用 tkfont 构建）。
+#: 状态 tag 在 severity tag 之后配置，因此叠加时以状态样式为准。
+DIFF_TAG_STYLES: dict[str, dict[str, Any]] = {
+    "diff_new": {"background": "#C42B1C", "foreground": "#FFFFFF"},
+    "diff_modified": {"background": "#F7630C", "foreground": "#FFFFFF"},
+    "diff_escalated": {"background": "#A4262C", "foreground": "#FFFFFF", "bold": True},
+    "diff_downgraded": {"background": "#F2D64B", "foreground": "#1F2328"},
+    "diff_resolved": {"foreground": "#8A8886", "overstrike": True},
+}
+
+
+def load_baseline_file(path: str | os.PathLike[str] | None) -> tuple[dict[str, Any] | None, str | None]:
+    """安全读取基线 JSON 报告，返回 ``(报告 dict, 错误原因)``；任何异常都不抛出。
+
+    - 文件不存在 / 无权限 / JSON 损坏 -> ``(None, 可读原因)``；
+    - 根节点不是 JSON 对象或缺少 findings 列表 -> 复用
+      :func:`core.baseline.validate_baseline_report` 校验后返回原因；
+    - 使用 ``utf-8-sig`` 读取，兼容 Windows 记事本保存的 BOM 头。
+    """
+    raw = str(path or "").strip()
+    if not raw:
+        return None, "未选择基线文件"
+    try:
+        with open(raw, "r", encoding="utf-8-sig") as handle:
+            payload = json.load(handle)
+    except FileNotFoundError:
+        return None, f"基线文件不存在：{raw}"
+    except json.JSONDecodeError as exc:
+        return None, f"基线文件不是合法 JSON（{exc.msg}，第 {exc.lineno} 行）"
+    except OSError as exc:
+        return None, f"无法读取基线文件：{exc}"
+    ok, reason = baseline.validate_baseline_report(payload)
+    if not ok:
+        return None, str(reason or "基线文件结构无效")
+    return payload, None
+
+
+def _normalize_diff_status(status: Any) -> str:
+    """把 diff_status 归一化为大写字符串（空值返回空串）。"""
+    return str(status or "").strip().upper()
+
+
+def diff_status_tag(status: Any) -> str | None:
+    """diff_status -> Treeview tag 名；UNCHANGED/空/未知状态返回 ``None``。"""
+    return DIFF_STATUS_TAGS.get(_normalize_diff_status(status))
+
+
+def finding_status_tag(finding: Any) -> str | None:
+    """取一条 Finding 的基线状态 tag（无 diff_status / 非 dict 时返回 ``None``）。"""
+    if not isinstance(finding, dict):
+        return None
+    return diff_status_tag(finding.get("diff_status"))
+
+
+def baseline_label_text(path: Any) -> str:
+    """工具栏基线标签文本：``对比基线: <文件名>``（空路径显示未加载）。"""
+    raw = str(path or "").strip()
+    if not raw:
+        return "对比基线: （未加载）"
+    name = Path(raw).name
+    return f"对比基线: {name or raw}"
 
 
 # ---------------------------------------------------------------------------
@@ -211,9 +292,10 @@ class FindingTree(tk.Frame):
 
     COLUMNS = (
         ("severity", "等级", 64),
-        ("category", "类别", 110),
-        ("target", "目标", 280),
-        ("summary", "摘要", 210),
+        STATUS_COLUMN,
+        ("category", "类别", 100),
+        ("target", "目标", 258),
+        ("summary", "摘要", 196),
     )
 
     def __init__(self, master: tk.Misc, on_select: Callable[[dict[str, Any] | None], None] | None = None) -> None:
@@ -263,6 +345,9 @@ class FindingTree(tk.Frame):
             self.tree.column(key, width=width, minwidth=48, stretch=(key in ("target", "summary")), anchor="w")
         for severity, color in SEVERITY_COLORS.items():
             self.tree.tag_configure(severity, foreground=color)
+        # 状态 tag 叠加在 severity tag 之上（配置顺序靠后者优先）
+        self._diff_fonts: list[tkfont.Font] = []
+        self._configure_diff_tags()
 
         vertical = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         horizontal = ttk.Scrollbar(table_wrap, orient="horizontal", command=self.tree.xview)
@@ -272,23 +357,43 @@ class FindingTree(tk.Frame):
         horizontal.grid(row=1, column=0, sticky="ew")
         self.tree.bind("<<TreeviewSelect>>", self._handle_select_event)
 
+    # -- 样式 --------------------------------------------------------------
+    def _configure_diff_tags(self) -> None:
+        """配置基线对比的整行 tag（RESOLVED 删除线用 tkfont.Font(overstrike=1)）。"""
+        bold_font = tkfont.Font(self, family=FONT_FAMILY, size=9, weight="bold")
+        overstrike_font = tkfont.Font(self, family=FONT_FAMILY, size=9, overstrike=1)
+        self._diff_fonts = [bold_font, overstrike_font]
+        for tag, style in DIFF_TAG_STYLES.items():
+            options: dict[str, Any] = {
+                key: style[key] for key in ("background", "foreground") if key in style
+            }
+            if style.get("bold"):
+                options["font"] = bold_font
+            if style.get("overstrike"):
+                options["font"] = overstrike_font
+            self.tree.tag_configure(tag, **options)
+
     # -- 数据 --------------------------------------------------------------
     def load(self, findings: list[dict[str, Any]]) -> None:
         self.clear()
         for index, finding in enumerate(findings):
             iid = str(index)
             severity = str(finding.get("severity") or "")
+            status = _normalize_diff_status(finding.get("diff_status"))
+            status_tag = finding_status_tag(finding)
+            tags: tuple[str, ...] = (severity, status_tag) if status_tag else (severity,)
             self.tree.insert(
                 "",
                 "end",
                 iid=iid,
                 values=(
                     severity,
+                    status,
                     truncate(finding.get("category"), 22),
                     _truncate_display(finding.get("target"), 62),
                     _truncate_display(finding.get("detail"), 70),
                 ),
-                tags=(severity,),
+                tags=tags,
             )
             self._findings[iid] = finding
         self._count_var.set(f"{len(findings)} 条")
@@ -724,6 +829,11 @@ class App(tk.Tk):
         self._scanning = False
         self._result: ScanResult | None = None
         self._poll_job: str | None = None
+        # 基线对比状态（V1.3）：未加载基线时全部为空，UI 行为与 V1.2 一致
+        self._baseline_report: dict[str, Any] | None = None
+        self._baseline_path = ""
+        self._baseline_diff: baseline.BaselineDiff | None = None
+        self._baseline_warnings: list[str] = []
 
         self._build_styles()
         self._build_ui()
@@ -909,6 +1019,22 @@ class App(tk.Tk):
         )
         self.start_button.pack(side="left")
 
+        self.compare_baseline_button = ttk.Button(
+            inner,
+            text="对比基线",
+            style="Secondary.TButton",
+            command=self._safe(self._on_load_baseline),
+        )
+        self.compare_baseline_button.pack(side="left", padx=(10, 0))
+
+        self.save_baseline_button = ttk.Button(
+            inner,
+            text="保存为基线",
+            style="Secondary.TButton",
+            command=self._safe(self._on_save_baseline),
+        )
+        self.save_baseline_button.pack(side="left", padx=(10, 0))
+
         self.export_button = ttk.Button(
             inner,
             text="导出报告",
@@ -917,6 +1043,8 @@ class App(tk.Tk):
             state="disabled",
         )
         self.export_button.pack(side="left", padx=(10, 0))
+
+        self._build_baseline_badge(inner)
 
         progress_wrap = tk.Frame(inner, bg=COLORS["card"])
         progress_wrap.pack(side="left", fill="x", expand=True, padx=(20, 0))
@@ -939,6 +1067,59 @@ class App(tk.Tk):
             value=0,
         )
         self.progress.pack(fill="x", pady=(6, 0))
+
+    def _build_baseline_badge(self, parent: tk.Frame) -> None:
+        """构建「对比基线: <文件名>」标签 + 小 X 取消按钮；未加载基线时隐藏。"""
+        self._baseline_badge = tk.Frame(parent, bg=COLORS["card"])
+        pill = tk.Frame(
+            self._baseline_badge,
+            bg=COLORS["accent_soft"],
+            highlightbackground=COLORS["accent_soft"],
+            highlightthickness=1,
+            bd=0,
+        )
+        pill.pack(side="left")
+        self._baseline_label_var = tk.StringVar(value="")
+        tk.Label(
+            pill,
+            textvariable=self._baseline_label_var,
+            bg=COLORS["accent_soft"],
+            fg=COLORS["accent"],
+            font=(FONT_FAMILY, 9),
+            padx=8,
+            pady=2,
+        ).pack(side="left")
+        self._cancel_baseline_button = tk.Button(
+            pill,
+            text="X",
+            command=self._safe(self._on_cancel_baseline),
+            bg=COLORS["accent_soft"],
+            fg=COLORS["accent"],
+            activebackground="#D6E8F8",
+            activeforeground=COLORS["accent"],
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            font=(FONT_FAMILY, 8, "bold"),
+            padx=6,
+            cursor="hand2",
+        )
+        self._cancel_baseline_button.pack(side="left")
+        # 先 pack 到右侧再 pack progress_wrap，避免被 expand 的进度区挤掉
+        self._baseline_badge.pack(side="right", padx=(10, 0))
+        self._baseline_badge.pack_forget()
+
+    def _show_baseline_badge(self) -> None:
+        """显示基线标签；存在版本/主机不一致警告时追加 ⚠ 标记。"""
+        label = baseline_label_text(self._baseline_path)
+        if self._baseline_warnings:
+            label += " ⚠"
+        self._baseline_label_var.set(label)
+        self._baseline_badge.pack(side="right", padx=(10, 0))
+
+    def _hide_baseline_badge(self) -> None:
+        self._baseline_label_var.set("")
+        self._baseline_badge.pack_forget()
 
     def _build_main_area(self, parent: tk.Frame) -> None:
         paned = tk.PanedWindow(
@@ -1071,28 +1252,35 @@ class App(tk.Tk):
         self._set_controls(scanning=False)
         self.export_button.configure(state="normal")
 
-        counts = severity_counts(result.findings)
-        for severity, card in self.stats.items():
-            card.set_value(counts.get(severity, 0))
-
         # 只读修复建议：在加载结果表之前挂载 remediation，详情面板才能显示「建议处理」与复制按钮
         try:
             result.findings = reporter.apply_remediation(result.findings)
         except Exception:  # noqa: BLE001 - 建议加载失败不能中断扫描结果展示
             pass
 
-        self.results_tree.load(result.findings)
+        # 有基线时这里完成 diff + annotate，统计卡片按非 RESOLVED 项重算；无基线走原逻辑
+        self._refresh_results_view()
+
+        total = len(result.findings)
         self.progress.configure(value=100)
-        self.progress_text_var.set(f"扫描完成 · 共 {len(result.findings)} 条结果")
+        self.progress_text_var.set(f"扫描完成 · 共 {total} 条结果")
 
         issues = f"，{len(result.errors)} 个模块异常" if result.errors else ""
-        self.status_var.set(f"扫描完成 · 共 {len(result.findings)} 条结果，耗时 {result.duration:.2f}s{issues}")
+        if self._baseline_report is not None:
+            counts = baseline.diff_counts(self._baseline_diff)
+            self.status_var.set(
+                f"扫描完成 · 基线对比 NEW {counts['NEW']} / MODIFIED {counts['MODIFIED']} / "
+                f"ESCALATED {counts['ESCALATED']} / DOWNGRADED {counts['DOWNGRADED']} / "
+                f"RESOLVED {counts['RESOLVED']}，耗时 {result.duration:.2f}s{issues}"
+            )
+        else:
+            self.status_var.set(f"扫描完成 · 共 {total} 条结果，耗时 {result.duration:.2f}s{issues}")
         self.info_var.set(
             f"模块 {result.modules_available}/{result.modules_total} · "
-            f"结果 {len(result.findings)} · 耗时 {result.duration:.2f}s"
+            f"结果 {total} · 耗时 {result.duration:.2f}s"
         )
         self.detail_panel.show_placeholder()
-        if result.findings:
+        if self.results_tree.tree.get_children():
             self.results_tree.select_first()
 
     def _on_scan_failed(self, message: str) -> None:
@@ -1116,6 +1304,161 @@ class App(tk.Tk):
         self.start_button.configure(state="disabled" if scanning else "normal", text="扫描中…" if scanning else "开始扫描")
         if scanning:
             self.export_button.configure(state="disabled")
+
+    # -- 基线对比 ----------------------------------------------------------
+    def _current_report(self) -> dict[str, Any]:
+        """构造当前结果对应的报告结构（供 host/version 警告使用）。"""
+        findings = list(self._result.findings) if self._result is not None else []
+        try:
+            return reporter.build_report(
+                findings,
+                version=__version__,
+                duration_seconds=(self._result.duration if self._result is not None else 0.0),
+                modules=(self._result.module_status if self._result is not None else None),
+            )
+        except Exception:  # noqa: BLE001 - 环境信息收集失败时退化为最小结构
+            return {"findings": findings, "version": __version__}
+
+    def _compute_annotated(self) -> list[dict[str, Any]]:
+        """对当前结果计算基线 diff，返回带 diff_status 的列表；无基线时原样返回。"""
+        findings = list(self._result.findings) if self._result is not None else []
+        if self._baseline_report is None or self._result is None:
+            self._baseline_diff = None
+            return findings
+        # 用原始 findings 列表做 diff，annotate_findings 才能按对象身份匹配、避免错行
+        self._baseline_diff = baseline.diff_reports(
+            self._baseline_report, findings, baseline_path=self._baseline_path
+        )
+        self._baseline_warnings = baseline.baseline_warnings(
+            self._baseline_report, self._current_report(), expected_version=__version__
+        )
+        self._show_baseline_badge()
+        return baseline.annotate_findings(findings, self._baseline_diff)
+
+    def _refresh_results_view(self) -> None:
+        """按当前结果 + 基线状态刷新统计卡片与结果表（无基线时与 V1.2 一致）。"""
+        if self._result is None:
+            return
+        if self._baseline_report is not None:
+            annotated = self._compute_annotated()
+            # 统计卡片排除 RESOLVED（已消失项不再计入当前风险）
+            active = [
+                finding
+                for finding in annotated
+                if _normalize_diff_status(finding.get("diff_status")) != baseline.DIFF_RESOLVED
+            ]
+            counts = severity_counts(active)
+            self.results_tree.load(annotated)
+        else:
+            self._baseline_diff = None
+            counts = severity_counts(self._result.findings)
+            self.results_tree.load(self._result.findings)
+        for severity, card in self.stats.items():
+            card.set_value(counts.get(severity, 0))
+
+    def _ensure_baseline_diff(self) -> baseline.BaselineDiff | None:
+        """导出时确保 diff 已计算（加载基线后未重新扫描的兜底）。"""
+        if self._baseline_report is None:
+            return None
+        if self._baseline_diff is None:
+            findings = list(self._result.findings) if self._result is not None else []
+            self._baseline_diff = baseline.diff_reports(
+                self._baseline_report, findings, baseline_path=self._baseline_path
+            )
+        return self._baseline_diff
+
+    def _baseline_status_text(self) -> str:
+        name = Path(self._baseline_path).name if self._baseline_path else ""
+        text = f"已加载基线：{name}" if name else "已加载基线"
+        if self._baseline_warnings:
+            text += " · WARNING：" + "；".join(self._baseline_warnings)
+        if self._result is not None:
+            counts = baseline.diff_counts(self._baseline_diff)
+            text += (
+                f" · NEW {counts['NEW']} / MODIFIED {counts['MODIFIED']} / "
+                f"ESCALATED {counts['ESCALATED']}"
+            )
+        return text
+
+    def _on_load_baseline(self) -> None:
+        path = filedialog.askopenfilename(
+            parent=self,
+            title="选择基线报告",
+            filetypes=[("JSON 报告", "*.json"), ("所有文件", "*.*")],
+        )
+        if not path:  # 用户取消
+            self.status_var.set("已取消选择基线")
+            return
+        report, error = load_baseline_file(path)
+        if report is None:
+            self.status_var.set(f"基线加载失败：{error or '未知原因'}")
+            messagebox.showwarning("无法加载基线", error or "未知原因", parent=self)
+            return
+        self._baseline_report = report
+        self._baseline_path = str(path)
+        self._baseline_diff = None
+        if self._result is not None:
+            self._refresh_results_view()  # 内部重算 warnings / 更新标签
+        else:
+            self._baseline_warnings = baseline.baseline_warnings(
+                report, self._current_report(), expected_version=__version__
+            )
+            self._show_baseline_badge()
+        self.status_var.set(self._baseline_status_text())
+
+    def _on_cancel_baseline(self) -> None:
+        if self._baseline_report is None and not self._baseline_path:
+            return
+        self._baseline_report = None
+        self._baseline_path = ""
+        self._baseline_diff = None
+        self._baseline_warnings = []
+        self._hide_baseline_badge()
+        if self._result is not None:
+            self._refresh_results_view()  # 用原始 result.findings 重新 load，去掉 diff_status
+            total = len(self._result.findings)
+            self.status_var.set(f"已取消基线对比 · 共 {total} 条结果")
+            self.progress_text_var.set(f"共 {total} 条结果")
+        else:
+            self.status_var.set("已取消基线对比")
+
+    def _on_save_baseline(self) -> None:
+        if self._result is None:
+            self.status_var.set("尚未扫描，无法保存基线")
+            messagebox.showinfo("保存基线", "请先完成一次扫描，再保存为基线。", parent=self)
+            return
+        default_name = datetime.now().strftime("tamper_scan_baseline_%Y%m%d_%H%M%S.json")
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            title="保存为基线",
+            defaultextension=".json",
+            initialfile=default_name,
+            filetypes=[("JSON 报告", "*.json")],
+        )
+        if not path:  # 用户取消
+            self.status_var.set("已取消保存基线")
+            return
+        try:
+            written = self._save_baseline_to_path(path)
+        except Exception as exc:  # noqa: BLE001 - 保存失败只弹窗，不崩溃
+            self.status_var.set("基线保存失败")
+            messagebox.showerror("基线保存失败", f"{type(exc).__name__}: {exc}", parent=self)
+            return
+        self.status_var.set(f"基线已保存：{written}")
+        messagebox.showinfo("基线已保存", f"基线文件已保存到：\n{written}", parent=self)
+
+    def _save_baseline_to_path(self, path: str) -> str:
+        """把当前结果写成基线 JSON（含 HIGH/MEDIUM 文件 SHA256，供哈希篡改检测）。"""
+        if self._result is None:
+            raise RuntimeError("当前没有可保存的扫描结果")
+        report = reporter.build_report(
+            self._result.findings,
+            version=__version__,
+            duration_seconds=self._result.duration,
+            modules=self._result.module_status,
+        )
+        report["findings"] = baseline.enrich_findings_with_hashes(report["findings"])
+        return reporter.write_json(report, path)
 
     # -- 交互 --------------------------------------------------------------
     def _on_select_finding(self, finding: dict[str, Any] | None) -> None:
@@ -1155,6 +1498,13 @@ class App(tk.Tk):
             duration_seconds=self._result.duration,
             modules=self._result.module_status,
         )
+        if self._baseline_report is not None:
+            # 有基线时把对比结果（含 baseline 元信息 / diff_status）写进报告；
+            # apply_baseline_diff 由 reporter 模块提供（V1.3），缺失时保持原报告不崩溃。
+            diff = self._ensure_baseline_diff()
+            apply_baseline_diff = getattr(reporter, "apply_baseline_diff", None)
+            if callable(apply_baseline_diff) and diff is not None:
+                report = apply_baseline_diff(report, diff, baseline_path=self._baseline_path)
         if str(fmt).lower() == "json":
             return reporter.write_json(report, path)
         return reporter.write_html(report, path)

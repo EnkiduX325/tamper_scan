@@ -12,6 +12,67 @@
 - 模块 2 后续增强：IPv6 远端地址（`FWP_BYTE_ARRAY16` 指针）解析与 NDR 布局跨版本兼容；
 - 模块 3 后续增强：RDP 配置类后门（`fDenyTSConnections` / 端口 / 影子会话等）。
 
+## [1.3.0] - 2026-11-11
+
+V1.3「基线对比（Baseline Diff）」：新增基线对比引擎，把静态扫描升级为动态判篡改——
+按 `(target, rule_base)` 主键对比历史基线与当前扫描，输出 NEW / RESOLVED / ESCALATED /
+DOWNGRADED / MODIFIED / UNCHANGED 六种状态；新增 4 个 CLI 参数与 GUI 基线交互；
+不传新参数时扫描行为、JSON 结构与退出码与 V1.2 完全一致。模块总数仍为 **20**。
+
+### Added
+
+- **基线对比引擎**（`core/baseline.py`）：
+  - 主键 `(target 归一化, rule_base)`：`rule_base` 剥离 `AUTORUNS_` / `SVC_` / `RDP_` 等采集层
+    前缀，并兼容 `evidence.merged_rules`，避免规则合并导致同一事实被误判 `NEW`；
+  - 六种状态：`NEW`（新增）、`RESOLVED`（消失）、`ESCALATED`（升级）、`DOWNGRADED`（降级）、
+    `MODIFIED`（状态指纹 / 哈希变化）、`UNCHANGED`（一致）；
+  - fingerprint：只提取 `signature.status` / `signature.signer` / `pe.CompanyName` / `actual` /
+    `service.path_name` / `task.sd_present` / `task.index` 等稳定字段，剥离 `timestamp` / `pid`
+    等易变字段后计算 SHA256；
+  - `enrich_findings_with_hashes()`：为 HIGH/MEDIUM 本地文件 target 写入 `evidence.sha256`；
+    “签名有效但文件哈希改变，高度疑似被篡改” → 判定 `MODIFIED` 并强制 `HIGH`。
+- **CLI 基线参数**（`main.py`，向后兼容）：
+  - `--save-baseline PATH`：扫描后保存完整 JSON 基线（不对比；与 `--baseline` 同时给出时保存优先）；
+  - `--baseline PATH`：加载基线并对比，报告每条 Finding 带 `diff_status`；
+  - `--fail-on-new`：存在 `NEW` 的 HIGH/MEDIUM 时强制退出码 `2`（NEW 的 LOW/INFO 不触发）；
+  - `--hash-targets`：为 HIGH/MEDIUM 本地文件写入 `evidence.sha256`，可配合 `--save-baseline`。
+- **报告基线展示**（`reporter.py`）：
+  - 启用 `--baseline` 时 JSON 顶层新增 `baseline{path,generated_at}`，每条 Finding 新增
+    `diff_status`，`summary` 新增 `diff_counts`；`RESOLVED` 条目保留在报告中但不计入
+    `summary.counts` / 退出码；
+  - HTML 新增「基线对比」统计（NEW / MODIFIED / ESCALATED 等）、状态徽章
+    （NEW 红、MODIFIED 橙、ESCALATED 红底加粗、DOWNGRADED 黄、RESOLVED 灰底+删除线）与
+    「⚠️ 此项目与基线相比发生变化」警告横幅；不启用基线时 HTML 与 V1.2 一致。
+- **GUI 基线交互**（`gui.py`）：「对比基线」「保存为基线」按钮，结果列表新增「状态」列，
+  显示「对比基线: <文件名>」与 X 取消对比；导出报告自动带基线 diff 信息。
+- **测试与 CI**：新增基线对比测试（`tests/test_baseline*.py`，覆盖引擎 / CLI / 报告 / GUI
+  纯函数），CI 与 `tools/verify_v13.ps1` 增加基线引擎六状态自检与 CLI 基线参数断言；
+  单元测试总数 426 条（V1.3 起，含基线对比测试）。
+
+### Changed
+
+- 版本号升级为 `1.3.0`（`core/version.py` 唯一来源）；README 新增/更新基线使用章节、CLI 参数、
+  JSON / HTML 结构、GUI 说明、目录树与本地校验脚本引用（`tools/verify_v13.ps1`）。
+- 退出码：启用基线对比时按“当前扫描 Finding（排除 `RESOLVED`）”重算；`--fail-on-new`
+  为额外强制条件。未启用新参数时退出码/报告结构与 V1.2 完全一致。
+- 模块总数保持 **20**，任何扫描模块的规则与严重等级语义均未改变。
+
+### Fixed
+
+- 基线解析异常（文件缺失 / JSON 损坏 / 根节点非对象 / 缺 `findings` 列表）统一降级为
+  `[WARN]` 并跳过对比，不再可能因基线输入中断扫描；
+- 保证不启用基线参数时 JSON / HTML / 退出码与 V1.2 结构一致（无 `baseline` /
+  `diff_status` / `diff_counts` / `sha256` 新增键的回归保护）。
+
+### Security
+
+- 基线文件视为**用户输入**：所有字段通过防御性解析（缺失/类型不符不抛异常），损坏的基线只
+  输出 WARNING 并跳过对比，避免恶意/误改基线导致扫描器崩溃；
+- 基线与当前主机名/版本不一致时只提示 WARNING，不静默忽略差异；
+- 基线是完整报告的快照，包含主机名/用户名/路径等敏感信息，文档明确提示不要提交真实个人数据；
+- `--hash-targets` 只读取本地文件计算哈希，不修改、不执行任何文件；基线对比全程只读，
+  不触发任何处置动作。
+
 ## [1.2.0] - 2026-11-11
 
 V1.2「冷门持久化与只读修复建议」：模块总数增至 **20**（新增 `persistence_ext`），扩展

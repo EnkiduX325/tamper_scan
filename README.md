@@ -10,7 +10,15 @@
 
 ![TamperScan 图形界面：扫描结果与详情面板](docs/screenshots/gui_results.png)
 
-- 版本：`1.2.0`（唯一来源：[core/version.py](core/version.py)）
+- 版本：`1.3.0`（唯一来源：[core/version.py](core/version.py)）
+- **V1.3 更新（2026-11-11）：基线对比（Baseline Diff）**：
+  - 新增 [core/baseline.py](core/baseline.py) 基线对比引擎：按 `(target, rule_base)` 主键输出 **NEW / RESOLVED / ESCALATED / DOWNGRADED / MODIFIED / UNCHANGED** 六种状态，`fingerprint` 自动剔除 `timestamp` / `pid` 等易变字段；
+  - CLI 新增 `--save-baseline PATH`（保存基线）、`--baseline PATH`（对比基线）、`--fail-on-new`（存在 NEW 的 HIGH/MEDIUM 时强制退出码 `2`）、`--hash-targets`（HIGH/MEDIUM 本地文件写入 `evidence.sha256`），详见 [§3.1](#31-基线对比v13)；
+  - 新增“签名有效但文件哈希改变，高度疑似被篡改”检测：基线与当前签名都 `valid` 但 SHA256 不同 → 判定 `MODIFIED` 并强制 `HIGH`；
+  - 报告：启用 `--baseline` 时 JSON 顶层 `baseline{path,generated_at}`、每条 Finding 带 `diff_status`；HTML 增加基线对比统计、状态徽章（NEW 红 / MODIFIED 橙 / RESOLVED 灰+删除线）与「⚠️ 此项目与基线相比发生变化」横幅；
+  - GUI 新增「对比基线」「保存为基线」按钮、结果列表「状态」列与「对比基线: <文件名>」+ X 取消对比；
+  - **向后兼容**：不传上述新参数时，扫描行为 / JSON 结构 / 退出码与 V1.2 完全一致；
+  - 单元测试扩展至 **426 条**（V1.3 起，含基线对比测试；完整通过 `python -m pytest -q`）。
 - **V1.2 更新（2026-11-11）**：
   - 许可证由 MIT 变更为 **CC BY-NC 4.0**（署名-非商业性使用），**严禁未经授权的商业用途**，详见 [§11](#11-许可协议)；
   - 新增第 20 个模块 `persistence_ext`「冷门持久化扩展点」（Netsh Helper / TimeProvider / Print 处理器与监视器 / Active Setup / AppCompat Shim / SilentProcessExit / WER LocalDumps / CMD Autorun / SCRNSaver 共 10 个检测点），模块总数 **20**，规则清单见 [§9.2](#92-v12-新增变更规则清单)；
@@ -49,6 +57,10 @@ python gui.py                :: 源码方式启动
 dist\tamper_scan.exe --scan
 dist\tamper_scan.exe --scan --format both --output reports\scan
 python main.py --scan --quiet --format both --output C:\reports\tamper
+
+:: 基线对比（V1.3）：首次保存基线，之后每次扫描对比
+dist\tamper_scan.exe --scan --save-baseline C:\baseline\base.json
+dist\tamper_scan.exe --scan --baseline C:\baseline\base.json --fail-on-new
 ```
 
  方式 C：源码运行
@@ -96,6 +108,7 @@ python gui.py                :: GUI
 | 结果展示 | 五色统计卡片 + 结果表格 + 详情面板 + 进度条 | 控制台逐条打印 + JSON/HTML 报告文件 |
 | 自动化 | 不适合（交互式） | 适合：`--quiet` + 退出码 `2/1/0` |
 | 报告导出 | 界面按钮导出 HTML/JSON（文件对话框） | `--format json\|html\|both --output PATH` |
+| 基线对比 | 「对比基线」/「保存为基线」按钮；结果列表「状态」列；X 取消对比 | `--baseline` / `--save-baseline` / `--fail-on-new` / `--hash-targets`（见 [§3.1](#31-基线对比v13)） |
 | 典型用户 | 普通用户日常巡检、人工确认 | 运维/安全团队批量调度 |
 | 权限完整度 | 取决于是否以管理员身份运行（见 2.2） | 同左 |
 
@@ -117,10 +130,10 @@ python gui.py                :: GUI
 
  2.3 界面功能速览
 
-- 五色统计卡片（顶部）：HIGH 红、MEDIUM 橙、LOW 黄、INFO 蓝、SKIPPED 灰，数字为本次扫描各等级结果数；SKIPPED 卡片 > 0 时提示存在未检查项。
-- 左侧结果列表：按严重等级排序，行文字与等级同色；列为「等级 / 类别 / 目标 / 摘要」，点击任意行在右侧查看完整详情。
+- 五色统计卡片（顶部）：HIGH 红、MEDIUM 橙、LOW 黄、INFO 蓝、SKIPPED 灰，数字为本次扫描各等级结果数；SKIPPED 卡片 > 0 时提示存在未检查项。启用基线对比时按“排除 `RESOLVED` 的当前结果”重算。
+- 左侧结果列表：按严重等级排序，行文字与等级同色；列为「等级 / 类别 / 目标 / 摘要」，启用基线对比时额外显示「状态」列，点击任意行在右侧查看完整详情。
 - 右侧详情面板：等级徽章、规则编号、类别、`target`、`detail`，以及可滚动的结构化 `evidence`（签名结果、PE 元数据、命中规则、攻击链等原始证据），便于人工确认。
-- 工具栏：「开始扫描」在扫描期间禁用并显示实时进度与当前模块名；「导出报告」复用 [reporter.py](reporter.py) 生成自包含 HTML 或 JSON（原生保存对话框，取消不会报错）。
+- 工具栏：「开始扫描」在扫描期间禁用并显示实时进度与当前模块名；V1.3 新增「对比基线」「保存为基线」：保存为基线在无扫描结果时提示先扫描，对比基线用文件对话框选择基线 JSON，加载后显示「对比基线: <文件名>」与小 X 取消（取消后列表恢复原始状态）；「导出报告」复用 [reporter.py](reporter.py) 生成自包含 HTML 或 JSON（原生保存对话框，取消不会报错）。
 - 底部状态栏：当前状态、可用模块数、结果数、耗时；扫描在后台线程执行，界面全程可响应、不“未响应”。
 
 ![扫描进行中：进度条与模块提示](docs/screenshots/gui_scanning.png)
@@ -164,7 +177,11 @@ build.bat
 | `--module NAME` | 只运行指定模块（可重复，调试/验收用） |
 | `--verbose, -v` | 输出模块级明细（含跳过原因） |
 | `--list-modules` | 列出 20 个扫描模块及接入状态 |
-| `--version` | 打印版本（当前 `1.2.0`） |
+| `--save-baseline PATH` | 扫描后把完整 JSON 报告保存为基线（**不对比**；与 `--baseline` 同时给出时保存优先并退出） |
+| `--baseline PATH` | 加载基线 JSON 并与本次扫描对比：每条 Finding 带 `diff_status`，JSON 顶层带 `baseline{path,generated_at}` |
+| `--fail-on-new` | 仅当存在状态为 `NEW` 且严重等级为 `HIGH`/`MEDIUM` 的条目时强制退出码 `2`；默认退出码逻辑不变 |
+| `--hash-targets` | 对 `HIGH`/`MEDIUM` 且 target 为本地文件的 Finding 计算 SHA256 写入 `evidence.sha256`；可配合 `--save-baseline` 用于“签名有效但哈希改变”检测 |
+| `--version` | 打印版本（当前 `1.3.0`） |
 
 示例：
 
@@ -180,9 +197,51 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 
 | 退出码 | 含义 |
 |---|---|
-| `2` | 存在 `HIGH` Finding |
+| `2` | 存在 `HIGH` Finding（或启用 `--fail-on-new` 且存在 NEW 的 HIGH/MEDIUM，见 [§3.1](#31-基线对比v13)） |
 | `1` | 无 HIGH，但存在 `MEDIUM` |
 | `0` | 其余情况（仅 LOW/INFO/SKIPPED 或干净） |
+
+ 3.1 基线对比（V1.3）
+
+基线对比把「静态扫描」升级为「动态判篡改」：把本次扫描与之前保存的基线报告按主键逐项比较，报告哪些是新增、消失、升级、降级或状态变化。
+
+**基本流程**
+
+```bat
+:: 1) 建立基线：建议先以管理员身份做一次完整扫描再保存
+tamper_scan.exe --scan --save-baseline C:\baseline\base.json
+
+:: 2) 日常对比：报告带 diff_status，有 NEW 的 HIGH/MEDIUM 时以退出码 2 提醒
+tamper_scan.exe --scan --baseline C:\baseline\base.json --fail-on-new --format both --output C:\reports\daily
+
+:: 3) 哈希增强（检测“签名有效但文件被替换”）：基线与本次都加 --hash-targets
+tamper_scan.exe --scan --save-baseline C:\baseline\base.json --hash-targets
+tamper_scan.exe --scan --baseline C:\baseline\base.json --hash-targets --fail-on-new --format both --output C:\reports\daily
+```
+
+**六种对比状态**（主键为 `(target 归一化, rule_base)`；`rule_base` 会剥离 `AUTORUNS_`/`SVC_`/`RDP_` 等采集层前缀，并兼容 `evidence.merged_rules`，避免规则合并导致误判）：
+
+| 状态 | 含义 | 报告展示 |
+|---|---|---|
+| `NEW` | 本次有、基线没有 | 红色状态徽章；`--fail-on-new` 会将其中的 HIGH/MEDIUM 计入强制退出码 `2` |
+| `RESOLVED` | 基线有、本次没有（已消失） | 灰色徽章 + 删除线，仍保留在报告中便于复核，但**不计入**退出码/严重等级统计 |
+| `ESCALATED` | 主键相同但严重等级升高 | 红底加粗徽章 |
+| `DOWNGRADED` | 主键相同但严重等级降低 | 黄色徽章 |
+| `MODIFIED` | 主键相同但状态指纹（或文件 SHA256）变化 | 橙色徽章 + 变化横幅 |
+| `UNCHANGED` | 完全一致 | 不显示徽章 |
+
+**Fingerprint 与哈希**：`core/baseline.py` 只提取稳定状态字段（`signature.status`、`signature.signer`、`pe.CompanyName`、`actual`、`service.path_name`、`task.sd_present`、`task.index` 等），剥离 `timestamp` / `pid` 等易变字段后计算 SHA256；`--hash-targets` 额外为 HIGH/MEDIUM 的本地文件 target 计算文件哈希。当基线与本次签名状态都是 `valid` 而文件 SHA256 不同（白利用式篡改）时，直接判定 `MODIFIED` 并提升为 `HIGH`，`detail` 写明“签名有效但文件哈希改变，高度疑似被篡改”。
+
+**退出码与默认行为**：启用 `--baseline` 后，`summary.counts` / 退出码按“当前扫描 Finding（排除 `RESOLVED`）”重算；`--fail-on-new` 是**额外**的强制条件，只对 NEW 的 HIGH/MEDIUM 生效（NEW 的 LOW/INFO 不会抬高退出码）。`--save-baseline` 不改变退出码语义。`--save-baseline` 与 `--baseline` 同时给出时，保存优先并退出（不再对比）。
+
+**向后兼容（硬约束）**：不传 `--save-baseline` / `--baseline` / `--fail-on-new` / `--hash-targets` 时，扫描行为、JSON 结构、HTML 结构与退出码与 V1.2 完全一致（不会出现 `baseline` / `diff_status` / `diff_counts` / `sha256` 等新增键）。
+
+**基线的安全提示**：
+
+- 基线是**用户输入**：扫描器对基线文件做防御性解析——文件不存在、JSON 损坏、根节点不是对象、缺少 `findings` 列表时只输出 `[WARN]` 并跳过对比，不崩溃、不抛异常；
+- 基线版本与当前工具版本不一致、或主机名不一致时，只输出 WARNING（对比结果仅供参考），不阻断扫描；
+- 基线文件由完整报告生成，包含主机名/用户名/路径等**敏感信息**，与样例报告一样请勿提交真实个人数据；
+- 基线是某一时刻的快照：基线之后持续存在且未变化的威胁不会被标 `NEW`，首次建立基线前建议先人工复核高等级结果。
 
 ---
 
@@ -193,23 +252,25 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 ```json
 {
   "tool": "TamperScan",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "generated_at": "2026-11-11T00:00:00+00:00",
+  "baseline": {"path": "C:\\baseline\\base.json", "generated_at": "2026-11-10T00:00:00+00:00"},
   "host": {"name": "TEST-PC", "os": "Windows-11-...", "is_admin": true, "user": "User"},
   "scan": {
     "duration_seconds": 47.71,
     "modules_total": 20, "modules_available": 20,
     "modules": [{"name": "autoruns", "label": "...", "status": "ok", "count": 21, "error": null}]
   },
-  "summary": {"total": 32, "counts": {"HIGH": 12, "MEDIUM": 0, "LOW": 2, "INFO": 17, "SKIPPED": 1}, "exit_code": 2},
+  "summary": {"total": 32, "counts": {"HIGH": 12, "MEDIUM": 0, "LOW": 2, "INFO": 17, "SKIPPED": 1}, "diff_counts": {"NEW": 1, "MODIFIED": 0, "ESCALATED": 0, "DOWNGRADED": 0, "RESOLVED": 2, "UNCHANGED": 29}, "exit_code": 2},
   "findings": [
     {
       "severity": "HIGH | MEDIUM | LOW | INFO | SKIPPED",
       "category": "Autoruns",
       "target": "被检查对象（路径/键/任务名/进程）",
       "detail": "中文描述",
-      "evidence": {"...": "结构化证据：签名结果、PE 元数据、命中的规则/攻击链等"},
+      "evidence": {"...": "结构化证据：签名结果、PE 元数据、命中的规则/攻击链等", "sha256": "（--hash-targets 时为该文件的 SHA256）"},
       "rule_id": "SIG_UNSIGNED 等规则编号",
+      "diff_status": "NEW | RESOLVED | ESCALATED | DOWNGRADED | MODIFIED | UNCHANGED（启用 --baseline 时存在）",
       "remediation": {
         "summary": "建议处理摘要（只读）",
         "expected": "建议值",
@@ -226,6 +287,8 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 - 去重与排序复用 `core/finding.py`：`target + 规则基名`（如 `AUTORUNS_SIG_UNSIGNED` 与 `SIG_UNSIGNED` 同源合并，`evidence.merged_rules` 记录原始 rule_id），排序 HIGH → MEDIUM → LOW → INFO → SKIPPED。
 - 白名单命中的条目会降为 INFO（默认 `mode: downgrade`），`evidence.whitelisted=true` 且 `whitelist_match` 记录命中原因。
 - V1.2 起命中的 Finding 可带 `remediation` 字段（只读修复建议，来源 [rules/remediation.json](rules/remediation.json)）：`reporter.build_report()` 仅挂载建议文本，**扫描器与报告生成过程绝不执行其中任何命令**；没有建议的规则不写该字段。
+- V1.3 起启用 `--baseline` 时：报告顶层新增 `baseline{path,generated_at}`、每条 Finding 新增 `diff_status`、`summary` 新增 `diff_counts`；`RESOLVED` 条目保留在报告中（灰色+删除线），但不计入 `summary.counts` 与退出码。未启用基线时这些新增键都不会出现，保持 V1.2 结构。
+- V1.3 起 `--hash-targets` 为 `HIGH`/`MEDIUM` 且 target 为本地文件的 Finding 写入 `evidence.sha256`；注册表键/任务名等非文件 target 自动跳过，文件读取失败不中断扫描。
 - GUI 导出的 JSON 与 CLI 生成的 JSON 结构完全一致（同一 `reporter.build_report`）。
 
  HTML
@@ -243,6 +306,8 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 模板使用 Jinja2 且 autoescaping 强制开启（无关闭入口、无 `|safe`），攻击者可控字符串（扩展名、命令行、路径）均已转义。
 
 > V1.2 起 HTML 报告为带修复建议的条目增加「建议处理」区块：只读展示 `remediation.summary` 与命令文本（同样经过 autoescape），命令仅供复制后人工复核执行，报告本身不包含任何自动执行逻辑。
+
+> V1.3 起启用 `--baseline` 时 HTML 报告增加「基线对比」统计（NEW / MODIFIED / ESCALATED，并附其它状态计数）、每条 Finding 的 `diff_status` 状态徽章（NEW 红、MODIFIED 橙、ESCALATED 红底加粗、DOWNGRADED 黄、RESOLVED 灰底+删除线）与「⚠️ 此项目与基线相比发生变化」警告横幅（`UNCHANGED` 不显示）。不启用基线时 HTML 结构与 V1.2 一致。
 
 > 本仓库附一份脱敏后的管理员演示报告（主机名/用户名/路径均为示例值）：[reports/sample_report.json](reports/sample_report.json) / [reports/sample_report.html](reports/sample_report.html)。
 
@@ -280,6 +345,7 @@ tamper_scan.exe --scan --format both --output reports\admin_scan --max-memory-sc
 11. 凭证与 RDP 后门检测（`NP_` / `RDP_`）读取的 `Control\NetworkProvider` 与 `Services\TermService\Parameters` 在实测 Windows 11 上**标准用户可读**，因此标准用户也能得到真实结果；但加固系统/组策略可能收紧 ACL，此时按部分降级（`NP_ACCESS_DENIED` / `RDP_ACCESS_DENIED`，两部分互不影响）。Network Provider 基线为 `RDPNP→drprov.dll`、`P9NP→p9np.dll`、`LanmanWorkstation→ntlanman.dll`、`webclient→davclnt.dll`（Win11 起含 P9NP）；第三方 VPN/安全产品可能注册自己的 Provider，非微软签名的"未知提供者"按 HIGH 上报并附签名/路径证据，需人工确认是否为已知产品；RDP 侧只检测 `ServiceDll`，不覆盖 `termsrv.dll` 内存补丁/配置类后门。
 12. 未加引号的服务路径检测（`SVC_UNQUOTED_PATH`）复用 `service` 模块的 CIM 采集结果（短时缓存 180s，避免同一次扫描重复查询）；只按"含空格 + 未加引号 + SYSTEM 运行"给 MEDIUM，evidence 中附带候选劫持路径与当前用户可写的候选目录供人工判断真实可利用性；非 SYSTEM 服务（NetworkService/LocalService/域用户）不参与提权判定；`PathName` 由 CIM 返回、可能被系统截断（极长路径），本模块对完整字符串判定、展示统一截断。
 13. 只读修复建议（`remediation`）仅是参考文本：命令需人工复核后执行，扫描器不会自动执行、也不会校验命令结果；规则未提供建议时该字段缺省。`persistence_ext` 覆盖的冷门持久化位置在不同 Windows 版本/补丁级别下键名与默认值可能略有差异，异常结构按 `SKIPPED` 降级处理（未检查 ≠ 安全）。
+14. 基线对比（V1.3）是**状态型**对比：只能发现“与保存的基线快照不同”的变化，基线之后持续存在且未变化的威胁不会被标 `NEW`，首次建立基线前建议先人工复核高等级结果；`--hash-targets` 只对本地文件 target 计算哈希（注册表键/任务名等无文件目标无法用哈希判定），且“签名有效但哈希改变”要求基线与当前都保存了 `evidence.sha256`（保存基线时也要加 `--hash-targets`）；基线与当前的主机名/版本不一致时仅输出 WARNING，不阻断对比，结果需谨慎解读。
 
 ---
 
@@ -336,14 +402,14 @@ build.bat
 
  8.1 本地一键校验与样例报告重生成
 
-V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.bat` 会随 `--add-data tools;tools` 一起打包，体积很小）。V1.1 的本地校验脚本已更名为 `tools/verify_v12.ps1`：
+V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.bat` 会随 `--add-data tools;tools` 一起打包，体积很小）。本地校验脚本在 V1.3 更名为 `tools/verify_v13.ps1`：
 
 | 脚本 | 用途 | 用法 |
 |---|---|---|
-| `tools/verify_v12.ps1` | 本地一键复现 GitHub Actions：`compileall`（含 `tests/`）→ `pytest` → `ruff` → 版本号 / 模块数（20）/ 样例报告 / LICENSE 与 README 协议断言；退出码 0 表示全部通过 | `powershell -ExecutionPolicy Bypass -File tools\verify_v12.ps1`（可加 `-SkipInstall` 跳过自动安装 pytest/ruff，`-RunFullScan` 额外跑一次真实扫描） |
+| `tools/verify_v13.ps1` | 本地一键复现 GitHub Actions：`compileall`（含 `tests/`）→ `pytest` → `ruff` → 版本号 / 模块数（20）/ 样例报告 / LICENSE 与 README 协议断言 / **基线引擎六状态自检** / CLI 基线参数断言；退出码 0 表示全部通过 | `powershell -ExecutionPolicy Bypass -File tools\verify_v13.ps1`（可加 `-SkipInstall` 跳过自动安装 pytest/ruff，`-RunFullScan` 额外跑一次真实扫描） |
 | `tools/regenerate_sample_report.py` | 重新生成并脱敏 `reports/sample_report.json/.html`：用户目录 → `C:\Users\User`、主机名 → `TEST-PC`、用户名/域 → `User`/`DOMAIN`，按 `MODULE_REGISTRY` 归一 20 个模块状态并挂载只读 `remediation` 字段，再用 `reporter.render_html()` 重渲染 HTML | 先 `python main.py --scan --format both --output reports\sample_report`，再 `python tools\regenerate_sample_report.py` |
 
-> 提交前建议固定执行一次 `powershell -ExecutionPolicy Bypass -File tools\verify_v12.ps1`，与 CI（Python 3.10 / 3.11 矩阵）完全一致。
+> 提交前建议固定执行一次 `powershell -ExecutionPolicy Bypass -File tools\verify_v13.ps1`，与 CI（Python 3.10 / 3.11 矩阵）完全一致。
 > 样例报告包含主机名/用户名/路径，**重新生成后必须运行脱敏脚本并检查 `git diff reports/`**，禁止提交真实个人数据。
 
 最小提交前工作流：
@@ -351,7 +417,7 @@ V1.2 起在 `tools/` 提供两个开发脚本（不参与扫描逻辑；`build.b
 ```bat
 python -m pip install -r requirements.txt
 python -m pip install ruff pytest
-powershell -ExecutionPolicy Bypass -File tools\verify_v12.ps1
+powershell -ExecutionPolicy Bypass -File tools\verify_v13.ps1
 ```
 
 ---
@@ -360,9 +426,9 @@ powershell -ExecutionPolicy Bypass -File tools\verify_v12.ps1
 
 ```
 tamper_scan/
-├── main.py                   CLI 入口：参数解析、控制台输出、报告落盘、退出码
-├── gui.py                    GUI 入口：tkinter/ttk Fluent 界面，复用 core/scanner.py
-├── reporter.py               JSON / 自包含 HTML 报告（Jinja2 autoescape）
+├── main.py                   CLI 入口：参数解析（含 V1.3 基线参数）、控制台输出、报告落盘、退出码
+├── gui.py                    GUI 入口：tkinter/ttk Fluent 界面，复用 core/scanner.py；V1.3 基线对比/保存
+├── reporter.py               JSON / 自包含 HTML 报告（Jinja2 autoescape；V1.3 基线 diff 挂载）
 ├── requirements.txt          运行依赖（GUI 无需新增依赖，tkinter 为标准库）
 ├── requirements-build.txt    打包依赖（含 -r requirements.txt + pyinstaller）
 ├── build.bat                 一键打包：CLI + GUI 两个 onefile exe
@@ -371,6 +437,7 @@ tamper_scan/
 ├── core/
 │   ├── scanner.py            扫描调度核心（CLI/GUI 共用）：模块顺序、进度回调、白名单、去重排序
 │   ├── finding.py            Finding 数据结构、去重（规则基名合并）、排序、退出码
+│   ├── baseline.py           V1.3 基线对比引擎：主键匹配、fingerprint、文件 SHA256 增强、防御性解析
 │   ├── signature.py          WinVerifyTrust 嵌入签名 + 目录签名兜底、PE 元数据
 │   ├── yara_engine.py        YARA 文件扫描 + skrapa 内存扫描封装（含权限降级）
 │   ├── utils.py              路径/ACL/命令行/白名单/系统组件启发式/外部命令（隐藏子进程窗口）
@@ -382,9 +449,10 @@ tamper_scan/
 │   ├── powershell_profile.py / com_hijack.py / lsa_appinit.py / persistence_ext.py
 │   ├── browser_ext.py / lolbin_process.py
 ├── tests/                    纯函数单元测试（不依赖管理员权限；`python -m pytest -q`）
+│   └── test_baseline*.py     V1.3 基线对比：引擎 / CLI / 报告 / GUI 纯函数测试
 ├── rules/                    规则与白名单（随 exe 打包，含 remediation.json 只读修复建议）
 ├── tools/                    外部工具目录（不含 autorunsc64.exe；下载说明见 tools/README.txt）
-│   ├── verify_v12.ps1        本地复现 CI（compileall + pytest + ruff + 版本/模块数/样例报告/协议断言）
+│   ├── verify_v13.ps1        本地复现 CI（compileall + pytest + ruff + 版本/模块数/样例报告/协议/基线断言）
 │   └── regenerate_sample_report.py  重新生成并脱敏演示报告（版本/20 模块归一 + remediation 挂载 + HTML 重渲染）
 ├── docs/screenshots/         界面截图（本 README 引用）
 └── reports/
@@ -479,6 +547,10 @@ V1.2 保持「20 个模块、统一模块契约」不变，重点新增/变更�
 - `reporter` 在生成 JSON/HTML 时为命中的 Finding 挂载 `remediation` 字段；HTML 报告渲染「建议处理」区块（autoescape）；
 - GUI 详情面板展示建议，并提供「一键复制命令」按钮（仅复制文本）；
 - **只读边界**：扫描器、报告生成与 GUI 全程**绝不执行** `remediation.command` 中的任何命令，也不做 shell 拼接执行；命令必须由用户人工复核后自行执行。
+
+ 9.3 V1.3 基线对比（非模块变更）
+
+V1.3 **不新增扫描模块**（仍为 20 个）：基线对比是横切能力，`core/baseline.py` 作用于所有模块产出的 Finding 与 `reporter.build_report()` 生成的报告，不改变任何模块的规则 ID、严重等级语义或扫描顺序。六种对比状态、主键/指纹规则与命令行用法见 [§3.1](#31-基线对比v13)；JSON / HTML 的 `diff_status` 字段与状态徽章见 [§4](#4-报告格式)。
 
 ---
 

@@ -16,6 +16,7 @@ CLI 与 GUI 共用同一套核心；本文件只负责：参数解析、控制�
 from __future__ import annotations
 
 import argparse
+import json
 import platform
 import sys
 import unicodedata
@@ -26,11 +27,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import reporter  # noqa: E402
+from core import baseline  # noqa: E402
 from core.finding import SEVERITIES, severity_counts  # noqa: E402
 from core.scanner import MODULE_REGISTRY, load_scanner, run_scan  # noqa: E402
 from core.utils import is_admin, truncate  # noqa: E402
 from core.version import __version__  # noqa: E402
-from reporter import build_report, write_report  # noqa: E402
+from reporter import build_report, write_json, write_report  # noqa: E402
 
 BANNER_LINE = "=" * 78
 
@@ -149,6 +152,44 @@ def _write_reports(report: dict[str, Any], args: argparse.Namespace) -> tuple[li
     return written, None
 
 
+def _load_baseline_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
+    """安全读取基线 JSON；任何问题只返回 ``(None, 原因)``，绝不抛异常。
+
+    ``--baseline`` 的基线文件属于用户输入（可能被误删/误改）：文件不存在、
+    JSON 损坏、根节点不是 dict、缺 findings 列表都只告警并跳过对比，不能影响
+    本次正常扫描与退出码。
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return None, f"基线文件不存在：{path}"
+    except OSError as exc:
+        return None, f"基线文件读取失败：{type(exc).__name__}: {exc}"
+    except ValueError as exc:  # JSONDecodeError / UnicodeDecodeError 均继承 ValueError
+        return None, f"基线文件不是合法 JSON：{exc}"
+    ok, reason = baseline.validate_baseline_report(data)
+    if not ok:
+        return None, f"基线文件无效：{reason}"
+    return (data if isinstance(data, dict) else None), None
+
+
+def _print_diff_summary(diff: baseline.BaselineDiff) -> None:
+    """打印基线对比的六种状态计数（非 quiet 模式）。"""
+    counts = baseline.diff_counts(diff)
+    print("-" * 78)
+    print(f"基线对比：共 {diff.total} 项")
+    print("  " + "  ".join(f"{status}: {counts[status]}" for status in baseline.DIFF_STATUSES))
+    changed = [
+        f"{status} {counts[status]}"
+        for status in baseline.DIFF_STATUSES
+        if status != baseline.DIFF_UNCHANGED and counts[status]
+    ]
+    if changed:
+        print("  变化：" + "，".join(changed))
+    print("-" * 78)
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     if not args.quiet:
         _print_header()
@@ -171,6 +212,41 @@ def cmd_scan(args: argparse.Namespace) -> int:
         duration_seconds=result.duration,
         modules=result.module_status,
     )
+
+    # --hash-targets：在保存/对比之前为 HIGH/MEDIUM 的本地文件 target 计算 SHA256
+    if getattr(args, "hash_targets", False):
+        report["findings"] = baseline.enrich_findings_with_hashes(report["findings"])
+
+    # --save-baseline：保存后直接退出；与 --baseline 同时给出时保存优先
+    save_baseline = getattr(args, "save_baseline", None)
+    if save_baseline:
+        try:
+            saved_path = write_json(report, save_baseline)
+        except Exception as exc:  # noqa: BLE001 - 基线写失败不影响扫描退出码语义
+            print(f"[WARN] 基线保存失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+            return int(report["summary"]["exit_code"])
+        print(f"基线已保存：{saved_path}")
+        return int(report["summary"]["exit_code"])
+
+    # --baseline：安全加载并对比；任何基线解析问题只告警，跳过对比继续正常输出
+    diff = None
+    baseline_path = getattr(args, "baseline", None)
+    if baseline_path:
+        baseline_report, load_error = _load_baseline_file(baseline_path)
+        if load_error:
+            print(f"[WARN] {load_error}，已跳过基线对比", file=sys.stderr)
+        else:
+            for warning in baseline.baseline_warnings(baseline_report, report, __version__):
+                print(f"[WARN] {warning}", file=sys.stderr)
+            diff = baseline.diff_reports(baseline_report, report, baseline_path=baseline_path)
+            report = reporter.apply_baseline_diff(report, diff, baseline_path=baseline_path)
+            if not args.quiet:
+                _print_diff_summary(diff)
+
+    exit_code = int(report["summary"]["exit_code"])
+    if getattr(args, "fail_on_new", False) and diff is not None and baseline.has_new_high_medium(diff):
+        exit_code = 2
+
     written, report_error = _write_reports(report, args)
 
     if args.quiet:
@@ -178,7 +254,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         summary = "  ".join(f"{name}: {counts[name]}" for name in SEVERITIES)
         print(
             f"扫描完成：{report['summary']['total']} 个 Finding，耗时 {result.duration:.2f}s，"
-            f"退出码 {report['summary']['exit_code']} | {summary}"
+            f"退出码 {exit_code} | {summary}"
         )
     else:
         _print_summary(result.findings, result.duration)
@@ -187,7 +263,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"报告已写入：{report_path}")
     if report_error:
         print(f"[WARN] {report_error}（扫描结果与退出码不受影响）", file=sys.stderr)
-    return int(report["summary"]["exit_code"])
+    return exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -198,11 +274,14 @@ def cmd_scan(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tamper_scan",
-        description="TamperScan —— 开箱即用的 Windows 防篡改扫描器（无基线启发式扫描）",
+        description="TamperScan —— 开箱即用的 Windows 防篡改扫描器（支持基线对比）",
         epilog=(
             "示例：tamper_scan.exe --scan\n"
             "      tamper_scan.exe --scan --format both --output reports/scan1\n"
-            "      tamper_scan.exe --scan --quiet --no-memory"
+            "      tamper_scan.exe --scan --quiet --no-memory\n"
+            "      tamper_scan.exe --scan --save-baseline baseline.json\n"
+            "      tamper_scan.exe --scan --baseline baseline.json --fail-on-new\n"
+            "      tamper_scan.exe --scan --baseline baseline.json --hash-targets --format both --output reports/scan2"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -225,6 +304,27 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("json", "html", "both"),
         metavar="FORMAT",
         help="报告格式 json|html|both（未给 --output 时写到当前目录 tamper_scan_report）",
+    )
+    parser.add_argument(
+        "--save-baseline",
+        metavar="PATH",
+        help="扫描后把本次报告保存为基线 JSON 并退出（不对比；与 --baseline 同时给出时以本参数为准）",
+    )
+    parser.add_argument(
+        "--baseline",
+        metavar="PATH",
+        help="加载基线 JSON 并在扫描后对比，报告写入 baseline 元信息与 Finding diff_status"
+        "（基线文件无效时仅告警并跳过对比）",
+    )
+    parser.add_argument(
+        "--fail-on-new",
+        action="store_true",
+        help="存在 NEW 状态的 HIGH/MEDIUM Finding 时强制退出码 2（需与 --baseline 一起使用）",
+    )
+    parser.add_argument(
+        "--hash-targets",
+        action="store_true",
+        help="为 HIGH/MEDIUM Finding 的本地文件 target 计算 SHA256（保存基线时写入，便于检测白利用式篡改）",
     )
     parser.add_argument("--no-memory", action="store_true", help="跳过进程内存扫描（skrapa）")
     parser.add_argument(

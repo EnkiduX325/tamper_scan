@@ -11,7 +11,10 @@
 - 去重/排序直接复用 ``core.finding`` 的 ``dedupe_findings(..., merge_rule_base=True)``
   与 ``sort_findings``，不在 reporter 里另写一套逻辑；
 - 退出码 = ``core.finding.exit_code_for``（HIGH=2，仅 MEDIUM=1，其余 0），与输出
-  格式/quiet 无关。
+  格式/quiet 无关；
+- **基线对比（V1.3）为可选增强**：只有显式调用 :func:`apply_baseline_diff` 时报告
+  才会多出 ``baseline`` / ``diff_status`` / ``diff_counts`` 字段；未调用时输出与
+  V1.2 完全一致（模板中的 diff 内容全部包在条件里）。
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ import socket
 from pathlib import Path
 from typing import Any, Iterable
 
-from core import utils
+from core import baseline, utils
 from core.finding import (
     SEVERITIES,
     dedupe_findings,
@@ -50,6 +53,22 @@ SEVERITY_LABELS = {
     "LOW": "低危",
     "INFO": "信息",
     "SKIPPED": "跳过",
+}
+
+# ---------------------------------------------------------------------------
+# 基线对比（V1.3 Baseline Diff）
+# ---------------------------------------------------------------------------
+# 仅在 CLI/GUI 主动调用 :func:`apply_baseline_diff` 时生效；未调用时报告结构
+# 与 V1.2 完全一致（无 ``baseline`` / ``diff_status`` / ``diff_counts`` 键）。
+
+#: 基线状态中文标签（顺序与 core.baseline.DIFF_STATUSES 一致，用于 HTML 统计表）
+DIFF_STATUS_LABELS: dict[str, str] = {
+    "NEW": "新增（NEW）",
+    "MODIFIED": "变更（MODIFIED）",
+    "ESCALATED": "升级（ESCALATED）",
+    "DOWNGRADED": "降级（DOWNGRADED）",
+    "RESOLVED": "已解决（RESOLVED）",
+    "UNCHANGED": "未变化（UNCHANGED）",
 }
 
 # ---------------------------------------------------------------------------
@@ -147,6 +166,27 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .remediation-risk.risk-LOW { color: var(--low); }
   .remediation-hint { color: var(--muted); font-size: 11px; margin: 8px 0 4px; }
   .remediation-command { background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
+{% if baseline_view %}
+  .baseline-meta { margin: 0 0 10px; color: var(--muted); font-size: 13px; word-break: break-all; }
+  .baseline-path { font-family: Consolas, "Courier New", monospace; color: var(--text); }
+  .diff-counts th, .diff-counts td { text-align: center; font-weight: 600; }
+  .diff-count-NEW, .diff-count-ESCALATED { color: var(--high); background: var(--high-bg); }
+  .diff-count-MODIFIED { color: var(--medium); background: var(--medium-bg); }
+  .diff-count-DOWNGRADED { color: var(--low); background: var(--low-bg); }
+  .diff-count-RESOLVED, .diff-count-UNCHANGED { color: var(--skipped); background: var(--skipped-bg); }
+  .diff-badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .diff-badge-NEW { color: #ffffff; background: var(--high); }
+  .diff-badge-MODIFIED { color: #ffffff; background: var(--medium); }
+  .diff-badge-ESCALATED { color: #ffffff; background: var(--high); font-weight: 700; }
+  .diff-badge-DOWNGRADED { color: var(--low); background: var(--low-bg); }
+  .diff-badge-RESOLVED { color: var(--skipped); background: var(--skipped-bg); }
+  .is-resolved { opacity: 0.85; }
+  .is-resolved .rule, .is-resolved .target, .is-resolved .detail { text-decoration: line-through; }
+  .diff-banner { margin: 8px 14px 0; padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+  .diff-banner-NEW, .diff-banner-MODIFIED, .diff-banner-ESCALATED { color: var(--high); background: var(--high-bg); border: 1px solid var(--high); }
+  .diff-banner-DOWNGRADED { color: var(--low); background: var(--low-bg); border: 1px solid var(--low); }
+  .diff-banner-RESOLVED { color: var(--skipped); background: var(--skipped-bg); border: 1px solid var(--skipped); }
+{% endif %}
   .empty { color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 24px; }
 </style>
@@ -183,6 +223,21 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     </table>
   </section>
 
+  {% if baseline_view %}
+  <section class="baseline">
+    <h2>基线对比</h2>
+    <p class="baseline-meta">基线文件：<span class="baseline-path">{{ baseline_view.name }}</span>{% if baseline_view.generated_at %} ｜ 基线生成时间：{{ baseline_view.generated_at }}{% endif %}</p>
+    <table class="diff-counts">
+      <thead>
+        <tr>{% for status, label in diff_status_labels.items() %}<th class="diff-count-{{ status }}">{{ label }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        <tr>{% for status, label in diff_status_labels.items() %}<td class="diff-count diff-count-{{ status }}">{{ baseline_view.counts[status] }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {% if report.scan.modules %}
   <section class="modules">
     <h2>模块状态</h2>
@@ -209,12 +264,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <p class="empty">未发现可疑项。</p>
     {% endif %}
     {% for finding in view_findings %}
-    <details class="finding sev-border-{{ finding.severity }}"{% if finding.severity == "HIGH" %} open{% endif %}>
+    <details class="finding sev-border-{{ finding.severity }}{% if finding.diff_status == "RESOLVED" %} is-resolved{% endif %}"{% if finding.severity == "HIGH" %} open{% endif %}>
       <summary>
         <span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span>
+        {% if finding.diff_status and finding.diff_status != "UNCHANGED" %}
+        <span class="diff-badge diff-badge-{{ finding.diff_status }} diff-status-{{ finding.diff_status }}">{{ finding.diff_status }}</span>
+        {% endif %}
         <span class="rule">{{ finding.rule_id }}</span>
         <span class="target">{{ finding.target }}</span>
       </summary>
+      {% if finding.diff_status and finding.diff_status != "UNCHANGED" %}
+      <p class="diff-banner diff-banner-{{ finding.diff_status }}">⚠️ 此项目与基线相比发生变化（{{ finding.diff_status }}）</p>
+      {% endif %}
       <p class="detail">{{ finding.detail }}</p>
       <pre class="evidence">{{ finding.evidence_json }}</pre>
       {% if finding.remediation %}
@@ -434,6 +495,45 @@ def build_report(
     }
 
 
+def apply_baseline_diff(report: dict[str, Any], diff: Any, baseline_path: str = "") -> dict[str, Any]:
+    """把 :mod:`core.baseline` 的对比结果挂到报告 dict，返回**新的** report。
+
+    行为（V1.3 契约）：
+
+    - 浅拷贝入参 report，不修改原 dict；``findings`` 用
+      ``core.baseline.annotate_findings`` 重新生成（追加 ``diff_status``，并追加
+      RESOLVED 基线项；hash_tamper 项提升为 HIGH 且 detail 追加篡改提示）；
+    - ``report["baseline"] = {"path": ..., "generated_at": ...}``（恰好两个键）；
+    - ``summary["diff_counts"]`` 写入六种状态计数；
+    - ``summary["counts"] / ["exit_code"] / ["total"]`` 按「当前扫描 Finding
+      （排除 ``diff_status == "RESOLVED"``）」重算，避免已解决项抬高退出码；
+    - 保留 summary 的其它键以及 report 的其它键。
+
+    未调用本函数时 :func:`build_report` 输出与 V1.2 完全一致。
+    """
+    source = report if isinstance(report, dict) else {}
+    updated = dict(source)
+
+    annotated = baseline.annotate_findings(source.get("findings") or [], diff)
+    updated["findings"] = annotated
+
+    meta = getattr(diff, "baseline_meta", None)
+    meta = meta if isinstance(meta, dict) else {}
+    updated["baseline"] = {
+        "path": str(baseline_path or meta.get("path") or ""),
+        "generated_at": str(meta.get("generated_at") or ""),
+    }
+
+    summary = dict(source.get("summary") or {})
+    summary["diff_counts"] = baseline.diff_counts(diff)
+    current = [item for item in annotated if str(item.get("diff_status") or "") != baseline.DIFF_RESOLVED]
+    summary["counts"] = severity_counts(current)
+    summary["exit_code"] = exit_code_for(current)
+    summary["total"] = len(current)
+    updated["summary"] = summary
+    return updated
+
+
 def render_json(report: dict[str, Any]) -> str:
     return json.dumps(report, ensure_ascii=False, indent=2, default=str)
 
@@ -450,6 +550,29 @@ def _view_findings(report: dict[str, Any]) -> list[dict[str, Any]]:
     return views
 
 
+def _baseline_view(report: dict[str, Any]) -> dict[str, Any] | None:
+    """提取 HTML 渲染所需的基线视图；未启用基线（无 ``report.baseline``）返回 ``None``。"""
+    meta = report.get("baseline")
+    if not isinstance(meta, dict) or not meta:
+        return None
+    path = str(meta.get("path") or "")
+    name = os.path.basename(path.replace("\\", "/")).strip() if path else ""
+    summary = report.get("summary")
+    raw_counts = summary.get("diff_counts") if isinstance(summary, dict) else None
+    raw_counts = raw_counts if isinstance(raw_counts, dict) else {}
+    counts: dict[str, int] = {}
+    for status in baseline.DIFF_STATUSES:
+        try:
+            counts[status] = int(raw_counts.get(status) or 0)
+        except (TypeError, ValueError):
+            counts[status] = 0
+    return {
+        "name": name or "(未命名基线)",
+        "generated_at": str(meta.get("generated_at") or ""),
+        "counts": counts,
+    }
+
+
 def render_html(report: dict[str, Any]) -> str:
     """渲染单文件自包含 HTML；Jinja2 autoescape 强制开启，缺失 jinja2 时用转义回退。"""
     context = {
@@ -459,6 +582,8 @@ def render_html(report: dict[str, Any]) -> str:
         "counts": report.get("summary", {}).get("counts") or {},
         "severity_order": list(SEVERITIES),
         "severity_labels": SEVERITY_LABELS,
+        "baseline_view": _baseline_view(report),
+        "diff_status_labels": DIFF_STATUS_LABELS,
     }
     if JINJA2_AVAILABLE:
         # autoescape=True 是硬约束：不提供关闭开关，模板中也不使用 |safe
@@ -499,18 +624,74 @@ def _fallback_remediation_html(finding: dict[str, Any]) -> str:
     )
 
 
+_FALLBACK_DIFF_CSS = (
+    ".baseline-meta{color:#57606a;font-size:13px;word-break:break-all;}"
+    ".diff-counts th,.diff-counts td{text-align:center;}"
+    ".diff-badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;margin-left:6px;}"
+    ".diff-badge-NEW{color:#fff;background:#b42318;}"
+    ".diff-badge-MODIFIED{color:#fff;background:#b54708;}"
+    ".diff-badge-ESCALATED{color:#fff;background:#b42318;font-weight:700;}"
+    ".diff-badge-DOWNGRADED{color:#8a6d00;background:#fdf7d8;}"
+    ".diff-badge-RESOLVED{color:#57606a;background:#eef0f2;}"
+    ".is-resolved{opacity:.85;}"
+    ".is-resolved summary{text-decoration:line-through;}"
+    ".diff-banner{margin:6px 0;padding:8px;border-radius:6px;font-size:13px;font-weight:600;}"
+    ".diff-banner-NEW,.diff-banner-MODIFIED,.diff-banner-ESCALATED{color:#b42318;background:#fde8e8;border:1px solid #b42318;}"
+    ".diff-banner-DOWNGRADED{color:#8a6d00;background:#fdf7d8;border:1px solid #8a6d00;}"
+    ".diff-banner-RESOLVED{color:#57606a;background:#eef0f2;border:1px solid #57606a;}"
+)
+
+
+def _fallback_baseline_html(report: dict[str, Any]) -> str:
+    """兜底渲染里的「基线对比」统计区块；未启用基线返回空串。"""
+    view = _baseline_view(report)
+    if not view:
+        return ""
+    escape = html_module.escape
+    header = "".join(
+        f'<th class="diff-count-{escape(status)}">{escape(label)}</th>'
+        for status, label in DIFF_STATUS_LABELS.items()
+    )
+    cells = "".join(
+        f'<td class="diff-count diff-count-{escape(status)}">{view["counts"][status]}</td>'
+        for status in DIFF_STATUS_LABELS
+    )
+    generated = f" ｜ 基线生成时间：{escape(view['generated_at'])}" if view["generated_at"] else ""
+    return (
+        '<section class="baseline"><h2>基线对比</h2>'
+        f'<p class="baseline-meta">基线文件：<span class="baseline-path">{escape(view["name"])}</span>{generated}</p>'
+        f'<table class="diff-counts"><thead><tr>{header}</tr></thead>'
+        f"<tbody><tr>{cells}</tr></tbody></table></section>"
+    )
+
+
+def _fallback_finding_diff(finding: dict[str, Any]) -> tuple[str, str, str]:
+    """兜底渲染中单条 Finding 的 ``(resolved_class, badge_html, banner_html)``。"""
+    status = str(finding.get("diff_status") or "")
+    if not status or status == baseline.DIFF_UNCHANGED:
+        return "", "", ""
+    escape = html_module.escape
+    safe_status = escape(status)
+    resolved_class = " is-resolved" if status == baseline.DIFF_RESOLVED else ""
+    badge = f'<span class="diff-badge diff-badge-{safe_status} diff-status-{safe_status}">{safe_status}</span>'
+    banner = f'<p class="diff-banner diff-banner-{safe_status}">⚠️ 此项目与基线相比发生变化（{safe_status}）</p>'
+    return resolved_class, badge, banner
+
+
 def _render_html_fallback(report: dict[str, Any]) -> str:
     """jinja2 缺失时的最小兜底渲染：所有动态内容一律 html.escape。"""
     escape = html_module.escape
     counts = report.get("summary", {}).get("counts") or {}
+    diff_css = _FALLBACK_DIFF_CSS if _baseline_view(report) else ""
     rows = []
     for finding in report.get("findings") or []:
         evidence = json.dumps(finding.get("evidence") or {}, ensure_ascii=False, indent=2, default=str)
+        resolved_class, badge, banner = _fallback_finding_diff(finding)
         rows.append(
-            "<details class=\"finding\">"
-            f"<summary><b>{escape(str(finding.get('severity')))}</b> "
+            f"<details class=\"finding{resolved_class}\">"
+            f"<summary><b>{escape(str(finding.get('severity')))}</b>{badge} "
             f"{escape(str(finding.get('rule_id')))} — {escape(str(finding.get('target')))}</summary>"
-            f"<p>{escape(str(finding.get('detail')))}</p>"
+            f"{banner}<p>{escape(str(finding.get('detail')))}</p>"
             f"<pre>{escape(evidence)}</pre>{_fallback_remediation_html(finding)}</details>"
         )
     counts_html = " ".join(f"<b>{escape(name)}</b>: {counts.get(name, 0)}" for name in SEVERITIES)
@@ -524,10 +705,12 @@ def _render_html_fallback(report: dict[str, Any]) -> str:
         ".remediation-meta{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0;}"
         ".remediation-meta div{display:contents;}"
         ".remediation-command{background:#fff;border:1px solid #d0d7de;}"
-        ".remediation-hint{color:#57606a;font-size:11px;margin:6px 0 4px;}</style>"
+        ".remediation-hint{color:#57606a;font-size:11px;margin:6px 0 4px;}"
+        f"{diff_css}</style>"
         "</head><body><h1>TamperScan 扫描报告</h1>"
         f"<p>生成时间：{escape(str(report.get('generated_at')))}｜主机：{escape(str(report.get('host', {}).get('name')))}｜版本：{escape(str(report.get('version')))}</p>"
         f"<p>统计：{counts_html}｜合计：{counts and report.get('summary', {}).get('total')}｜退出码：{report.get('summary', {}).get('exit_code')}</p>"
+        f"{_fallback_baseline_html(report)}"
         f"<h2>Finding 明细（{len(report.get('findings') or [])}）</h2>{''.join(rows)}"
         "</body></html>"
     )
